@@ -1,12 +1,38 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { streamChat } from "../lib/streaming";
 
 export function useChat() {
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem("chat_messages");
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {}
+      }
+    }
+    return [];
+  });
   const [isLoading, setIsLoading] = useState(false);
+  const [sessionId, setSessionId] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem("chat_session_id");
+      if (saved) return saved;
+      const newId = crypto.randomUUID();
+      sessionStorage.setItem("chat_session_id", newId);
+      return newId;
+    }
+    return "";
+  });
   const abortRef = useRef(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem("chat_messages", JSON.stringify(messages));
+    }
+  }, [messages]);
 
   const sendMessage = useCallback(async (question) => {
     if (!question.trim() || isLoading) return;
@@ -79,7 +105,9 @@ export function useChat() {
             setIsLoading(false);
           },
         },
-        abortRef.current.signal
+        abortRef.current.signal,
+        undefined,
+        sessionId
       );
     } catch {
       setIsLoading(false);
@@ -97,13 +125,49 @@ export function useChat() {
   const clearMessages = useCallback(() => {
     stopStreaming();
     setMessages([]);
+    const newId = crypto.randomUUID();
+    setSessionId(newId);
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem("chat_session_id", newId);
+      sessionStorage.removeItem("chat_messages");
+    }
   }, [stopStreaming]);
+
+  const loadSession = useCallback(async (id) => {
+    if (id === sessionId) return;
+    stopStreaming();
+    setIsLoading(true);
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+      const res = await fetch(`${apiUrl}/chat/sessions/${id}`);
+      if (res.ok) {
+        const data = await res.json();
+        const formatted = (data.messages || []).map((m, i) => ({
+          id: `${id}-msg-${i}`,
+          role: m.role,
+          content: m.content
+        }));
+        setMessages(formatted);
+        setSessionId(id);
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem("chat_session_id", id);
+          sessionStorage.setItem("chat_messages", JSON.stringify(formatted));
+        }
+      }
+    } catch(e) {
+      console.error("Failed to load session", e);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [sessionId, stopStreaming]);
 
   return {
     messages,
     isLoading,
+    sessionId,
     sendMessage,
     stopStreaming,
     clearMessages,
+    loadSession,
   };
 }

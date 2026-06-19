@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useEffect, useState, Suspense } from "react";
 import {
   MessageSquare,
   Upload,
@@ -9,6 +10,8 @@ import {
   BarChart3,
   Brain,
   Zap,
+  Plus,
+  Loader2
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 
@@ -39,8 +42,32 @@ const navItems = [
   },
 ];
 
-export function Sidebar() {
+function SidebarContent() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentSessionId = searchParams.get("id");
+  
+  const [sessions, setSessions] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchSessions();
+  }, [currentSessionId, pathname]);
+
+  const fetchSessions = async () => {
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+      const res = await fetch(`${apiUrl}/chat/sessions`);
+      if (res.ok) {
+        const data = await res.json();
+        setSessions(data || []);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <aside className="w-64 h-screen flex flex-col border-r border-border bg-card/50 backdrop-blur-sm z-20 shadow-xl shadow-black/5">
@@ -59,6 +86,16 @@ export function Sidebar() {
             </p>
           </div>
         </div>
+      </div>
+
+      <div className="p-4 pb-2 border-b border-border/50">
+        <Link
+          href="/chat"
+          className="w-full flex items-center justify-center gap-2 bg-foreground text-background hover:bg-foreground/90 px-4 py-2.5 rounded-xl font-semibold transition-all shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] duration-200"
+        >
+          <Plus className="w-4 h-4" />
+          New Chat
+        </Link>
       </div>
 
       {/* Nav */}
@@ -103,6 +140,42 @@ export function Sidebar() {
             </Link>
           );
         })}
+
+        <div className="my-4 border-t border-border/50" />
+
+        <p className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest px-3 pt-2 pb-2">
+          Recent Chats
+        </p>
+
+        {loading ? (
+          <div className="flex justify-center p-4">
+            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : sessions.length === 0 ? (
+          <p className="text-[11px] text-center text-muted-foreground mt-4">No past chats</p>
+        ) : (
+          sessions.map((s) => {
+            const isActive = currentSessionId === s.id;
+            return (
+              <Link
+                key={s.id}
+                href={`/chat?id=${s.id}`}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-300 group mb-1 truncate",
+                  isActive
+                    ? "bg-gradient-to-r from-primary/15 to-primary/5 text-primary font-medium shadow-sm border border-primary/20 scale-[1.02]"
+                    : "text-muted-foreground hover:bg-secondary hover:text-foreground border border-transparent hover:scale-[1.01]"
+                )}
+              >
+                <MessageSquare className={cn(
+                  "w-4 h-4 flex-shrink-0 transition-colors duration-300",
+                  isActive ? "text-primary" : "opacity-40 group-hover:opacity-80 group-hover:text-primary"
+                )} />
+                <span className="truncate">{s.title || "New Chat"}</span>
+              </Link>
+            )
+          })
+        )}
       </nav>
 
       {/* Footer */}
@@ -116,5 +189,13 @@ export function Sidebar() {
         </div>
       </div>
     </aside>
+  );
+}
+
+export function Sidebar() {
+  return (
+    <Suspense fallback={<aside className="w-64 h-screen border-r border-border bg-card/50"></aside>}>
+      <SidebarContent />
+    </Suspense>
   );
 }

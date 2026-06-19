@@ -6,7 +6,8 @@ export async function streamChat(
   question,
   callbacks,
   signal,
-  filterDocType
+  filterDocType,
+  sessionId
 ) {
   try {
     const response = await fetch(`${API_BASE}/chat`, {
@@ -16,6 +17,7 @@ export async function streamChat(
         question,
         stream: true,
         filter_doc_type: filterDocType,
+        session_id: sessionId,
       }),
       signal,
     });

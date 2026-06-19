@@ -95,4 +95,32 @@ npm run dev
 ### 4. You're Done! 🎉
 Open your web browser and navigate to **[http://localhost:3000](http://localhost:3000)**. 
 Go to the upload tab, drop in some documents, and start chatting with your very own Engineering Intelligence Hub!
+
+---
+
+## 🐳 Dockerized Deployment (Recommended)
+This project is fully Dockerized for production-ready deployment, fulfilling the assessment requirements. You can spin up the entire stack (Frontend, Backend, and ChromaDB) with a single command.
+
+### Prerequisites
+- **Docker** and **Docker Compose** installed on your machine.
+
+### Setup Instructions
+1. Clone the repository and configure your environment variables:
+```bash
+cp .env.example .env
+```
+2. Add your `OPENAI_API_KEY` to the `.env` file.
+3. Build and start the containers in detached mode:
+```bash
+docker-compose up -d --build
+```
+
+The system will automatically download the ChromaDB image, build the FastAPI backend, and build the Next.js frontend. 
+
+Once the containers are running, access the web UI at **[http://localhost:3000](http://localhost:3000)**.
+
+To stop the application, run:
+```bash
+docker-compose down
+```
 # Engineer-Hub-Intelligence-Platform

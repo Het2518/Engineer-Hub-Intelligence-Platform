@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from services.retrieval import hybrid_search, RetrievalResult
 from services.llm import stream_answer, parse_knowledge_cards, strip_knowledge_cards
+from services.memory import get_all_sessions, get_history
 from db.stats_store import record_query
 import structlog
 
@@ -20,6 +21,7 @@ class ChatRequest(BaseModel):
     question: str
     stream: bool = True
     filter_doc_type: Optional[str] = None
+    session_id: Optional[str] = None
 
 
 class Source(BaseModel):
@@ -71,7 +73,7 @@ async def chat(request: ChatRequest):
 
     if request.stream:
         return StreamingResponse(
-            _stream_response(request.question, results, sources, start),
+            _stream_response(request.question, results, sources, start, request.session_id),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
@@ -81,7 +83,7 @@ async def chat(request: ChatRequest):
     else:
         # Non-streaming: collect full response
         full_answer = ""
-        async for chunk in stream_answer(request.question, results):
+        async for chunk in stream_answer(request.question, results, request.session_id):
             full_answer += chunk
 
         elapsed = (time.time() - start) * 1000
@@ -103,6 +105,7 @@ async def _stream_response(
     results: list[RetrievalResult],
     sources: list[Source],
     start: float,
+    session_id: Optional[str] = None,
 ) -> AsyncIterator[str]:
     """SSE event generator for streaming responses."""
 
@@ -115,7 +118,7 @@ async def _stream_response(
 
     # Stream answer tokens
     full_answer = ""
-    async for token in stream_answer(question, results):
+    async for token in stream_answer(question, results, session_id):
         full_answer += token
         token_payload = json.dumps({"type": "token", "content": token})
         yield f"data: {token_payload}\n\n"
@@ -132,3 +135,13 @@ async def _stream_response(
     })
     yield f"data: {done_payload}\n\n"
     yield "data: [DONE]\n\n"
+
+@router.get("/chat/sessions")
+async def list_sessions():
+    """Get all past chat sessions."""
+    return get_all_sessions()
+
+@router.get("/chat/sessions/{session_id}")
+async def get_session_history(session_id: str):
+    """Get message history for a specific session."""
+    return {"messages": get_history(session_id)}

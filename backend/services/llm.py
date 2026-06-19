@@ -50,8 +50,11 @@ def _build_context(results: List[RetrievalResult]) -> str:
 async def stream_answer(
     question: str,
     results: List[RetrievalResult],
+    session_id: str | None = None,
 ) -> AsyncIterator[str]:
     """Stream GPT-4o response with context from retrieved documents."""
+    from services.memory import get_history, add_message
+    
     client = AsyncOpenAI(api_key=settings.openai_api_key, base_url="https://api.groq.com/openai/v1")
     context = _build_context(results)
 
@@ -63,22 +66,33 @@ Knowledge Base Context:
 Answer the question based on the context above. Include inline citations like [SOURCE: filename].
 """
 
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    
+    if session_id:
+        history = get_history(session_id)
+        messages.extend(history)
+        add_message(session_id, "user", question)
+
+    messages.append({"role": "user", "content": user_message})
+
     try:
         stream = await client.chat.completions.create(
             model=settings.openai_chat_model,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_message},
-            ],
+            messages=messages,
             stream=True,
             temperature=0.1,
             max_tokens=2000,
         )
 
+        full_response = ""
         async for chunk in stream:
             delta = chunk.choices[0].delta
             if delta.content:
+                full_response += delta.content
                 yield delta.content
+                
+        if session_id:
+            add_message(session_id, "assistant", full_response)
 
     except Exception as e:
         logger.error("LLM streaming failed", error=str(e))
@@ -88,10 +102,11 @@ Answer the question based on the context above. Include inline citations like [S
 async def get_answer(
     question: str,
     results: List[RetrievalResult],
+    session_id: str | None = None,
 ) -> str:
     """Non-streaming answer for internal use."""
     full_response = ""
-    async for chunk in stream_answer(question, results):
+    async for chunk in stream_answer(question, results, session_id):
         full_response += chunk
     return full_response
 
