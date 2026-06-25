@@ -5,22 +5,27 @@ import { MessageList } from "../../components/chat/MessageList";
 import { MessageInput } from "../../components/chat/MessageInput";
 import { Trash2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useEffect, Suspense } from "react";
+import { useEffect, useState, Suspense } from "react";
 
 function ChatPageContent() {
   const searchParams = useSearchParams();
   const urlSessionId = searchParams.get("id");
   const { messages, isLoading, sessionId, sendMessage, stopStreaming, clearMessages, loadSession } = useChat();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (urlSessionId) {
       if (sessionId !== urlSessionId) {
-         loadSession(urlSessionId);
+        loadSession(urlSessionId);
       }
     } else {
       // No ID in URL means start a fresh chat
       if (messages.length > 0 || (sessionId && sessionId !== urlSessionId)) {
-         clearMessages();
+        clearMessages();
       }
     }
   }, [urlSessionId]);
@@ -32,9 +37,9 @@ function ChatPageContent() {
         <div>
           <h1 className="font-semibold text-foreground text-xl flex items-center gap-2">
             Chat
-            {sessionId && (
+            {mounted && sessionId && (
               <span className="text-[10px] font-mono bg-accent/10 text-accent px-2 py-0.5 rounded-full border border-accent/20">
-                Memory Active: {sessionId.split('-')[0]}
+                Memory Active: {sessionId.split("-")[0]}
               </span>
             )}
           </h1>
@@ -42,7 +47,7 @@ function ChatPageContent() {
             Ask questions about your engineering knowledge base
           </p>
         </div>
-        {messages.length > 0 && (
+        {mounted && messages.length > 0 && (
           <button
             onClick={clearMessages}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs text-muted-foreground hover:text-accent hover:bg-accent/10 border border-transparent hover:border-accent/20 transition-all duration-200"
