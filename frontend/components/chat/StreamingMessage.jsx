@@ -1,24 +1,23 @@
 "use client";
 
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { MarkdownRenderer } from "./MarkdownRenderer";
 
 export function StreamingMessage({ content }) {
   if (!content) {
     return (
-      <div className="flex items-center gap-1.5 h-5">
-        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:0ms]" />
-        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:150ms]" />
-        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:300ms]" />
+      <div className="flex flex-col gap-2.5 w-full max-w-xl animate-pulse mt-2 mb-4">
+        <div className="h-4 bg-[hsl(var(--secondary))] rounded w-3/4"></div>
+        <div className="h-4 bg-[hsl(var(--secondary))] rounded w-full"></div>
+        <div className="h-4 bg-[hsl(var(--secondary))] rounded w-5/6"></div>
       </div>
     );
   }
 
+  const cleanContent = content.replace(/```knowledge_cards[\s\S]*?```/g, "");
+
   return (
-    <div className="prose-dark streaming-cursor">
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-        {content}
-      </ReactMarkdown>
+    <div className="streaming-markdown">
+      <MarkdownRenderer content={cleanContent} streaming={true} />
     </div>
   );
 }

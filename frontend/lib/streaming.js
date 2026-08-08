@@ -7,7 +7,8 @@ export async function streamChat(
   callbacks,
   signal,
   filterDocType,
-  sessionId
+  sessionId,
+  attachedFiles = null
 ) {
   try {
     const response = await fetch(`${API_BASE}/chat`, {
@@ -18,6 +19,7 @@ export async function streamChat(
         stream: true,
         filter_doc_type: filterDocType,
         session_id: sessionId,
+        attached_files: attachedFiles,
       }),
       signal,
     });
@@ -66,6 +68,13 @@ export async function streamChat(
 
 function handleEvent(event, callbacks) {
   switch (event.type) {
+    case "thinking":
+      callbacks.onThinking?.({
+        okf_sources: event.okf_sources || 0,
+        rag_sources: event.rag_sources || 0,
+        total: event.total || 0,
+      });
+      break;
     case "sources":
       callbacks.onSources?.(event.sources);
       break;
@@ -73,7 +82,11 @@ function handleEvent(event, callbacks) {
       callbacks.onToken?.(event.content);
       break;
     case "done":
-      callbacks.onDone?.(event.knowledge_cards, event.response_time_ms);
+      callbacks.onDone?.({
+        response_time_ms: event.response_time_ms,
+        context_used: event.context_used || 0,
+        okf_sources: event.okf_sources || 0,
+      });
       break;
     case "error":
       callbacks.onError?.(event.message);

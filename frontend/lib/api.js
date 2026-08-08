@@ -24,6 +24,23 @@ class ApiClient {
     return res.json();
   }
 
+  async parseChatFile(file) {
+    const form = new FormData();
+    form.append("file", file);
+
+    const res = await fetch(`${this.base}/chat/parse-file`, {
+      method: "POST",
+      body: form,
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || `Parse failed: ${res.status}`);
+    }
+
+    return res.json();
+  }
+
   async indexGitHub(repoUrl, branch) {
     const res = await fetch(`${this.base}/github-index`, {
       method: "POST",

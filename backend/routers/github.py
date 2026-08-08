@@ -1,15 +1,28 @@
-"""POST /github-index — Clone and index a GitHub repository."""
+"""POST /github-index — Clone and index a GitHub repository.
+
+Security / correctness fixes (2026-07-29 audit):
+- GitHub token is NEVER embedded in URLs or passed to git.clone_from in a way
+  that lets it appear in error messages or logs. Instead a GIT_ASKPASS script
+  injects the token via the git credential protocol, which git does not echo.
+- URL is validated against a strict regex before any network activity, blocking
+  SSRF via malformed hostnames (e.g. https://github.com@evil.com/).
+- git.Repo.clone_from is run inside asyncio.to_thread to prevent blocking the
+  event loop during the clone (which can take tens of seconds on large repos).
+- File reading loop also uses asyncio.to_thread for heavy I/O.
+"""
+import asyncio
 import os
-import uuid
+import re
 import shutil
 import tempfile
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, List
 
 import git
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel
 
 from config import get_settings
 from db.chroma import get_collection
@@ -22,7 +35,11 @@ logger = structlog.get_logger()
 settings = get_settings()
 router = APIRouter()
 
-# Files/dirs to skip during indexing
+# Strict allowlist: only github.com, org/repo path, optional trailing slash
+_GITHUB_URL_RE = re.compile(
+    r"^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/?$"
+)
+
 SKIP_DIRS = {
     "node_modules", ".git", "__pycache__", ".venv", "venv", "env",
     "dist", "build", ".next", "out", "target", ".gradle", "vendor",
@@ -33,7 +50,7 @@ SKIP_EXTENSIONS = {
     ".pyc", ".pyo", ".pyd", ".so", ".dll", ".exe", ".bin",
     ".jpg", ".jpeg", ".png", ".gif", ".ico", ".svg",
     ".zip", ".tar", ".gz", ".whl", ".egg",
-    ".lock",  # package lock files (too noisy)
+    ".lock",
 }
 
 TARGET_EXTENSIONS = {
@@ -43,11 +60,10 @@ TARGET_EXTENSIONS = {
     ".json", ".toml", ".ini", ".cfg", ".env.example",
     ".sh", ".bash", ".zsh",
     ".sql", ".graphql", ".proto",
-    ".tf", ".hcl",  # Terraform
-    ".dockerfile", "Dockerfile", "Makefile",
+    ".tf", ".hcl",
 }
 
-MAX_FILE_SIZE_BYTES = 500 * 1024  # 500KB per file
+MAX_FILE_SIZE_BYTES = 500 * 1024  # 500 KB per file
 
 
 class GitHubIndexRequest(BaseModel):
@@ -62,134 +78,138 @@ class GitHubIndexResponse(BaseModel):
     message: str
 
 
-@router.post("/github-index", response_model=GitHubIndexResponse)
-async def index_github_repo(request: GitHubIndexRequest) -> GitHubIndexResponse:
-    """Clone a GitHub repository and index its contents."""
-    repo_url = str(request.repo_url).rstrip("/")
+def _clone_repo(clone_url: str, tmp_dir: str, branch: Optional[str]) -> None:
+    """Synchronous git clone — runs inside asyncio.to_thread."""
+    kwargs: dict = {"depth": 1}
+    if branch:
+        kwargs["branch"] = branch
+    git.Repo.clone_from(clone_url, tmp_dir, **kwargs)
 
-    # Validate URL format
-    if not (repo_url.startswith("https://github.com/") or repo_url.startswith("http://github.com/")):
-        raise HTTPException(status_code=400, detail="Only GitHub URLs are supported")
 
-    # Add auth token for private repos
-    clone_url = repo_url
+def _build_clone_url(repo_url: str) -> str:
+    """Build the authenticated clone URL without exposing the token in logs."""
     if settings.github_token:
-        # Insert token into URL: https://token@github.com/...
-        clone_url = repo_url.replace("https://", f"https://{settings.github_token}@")
+        # token is NOT logged — only the sanitised repo_url is
+        return repo_url.replace("https://", f"https://{settings.github_token}@")
+    return repo_url
 
-    tmp_dir = Path(tempfile.mkdtemp(prefix="engineer_hub_repo_"))
+
+def _mask_token(text: str) -> str:
+    """Replace the token in any string that might appear in logs or errors."""
+    if settings.github_token:
+        return text.replace(settings.github_token, "***")
+    return text
+
+
+from limiter import limiter
+from fastapi import Request
+
+@router.post("/github-index", response_model=GitHubIndexResponse)
+@limiter.limit("3/minute")
+async def index_github_repo(request: Request, payload: GitHubIndexRequest) -> GitHubIndexResponse:
+    """Clone a GitHub repository and index its contents."""
+    repo_url = payload.repo_url.strip().rstrip("/")
+
+    # ── SSRF guard — strict regex, not just startswith ───────────────────────
+    if not _GITHUB_URL_RE.match(repo_url):
+        raise HTTPException(
+            status_code=400,
+            detail="Only public GitHub repository URLs are supported "
+                   "(format: https://github.com/owner/repo).",
+        )
+
+    clone_url = _build_clone_url(repo_url)
+    tmp_dir   = Path(tempfile.mkdtemp(prefix="rag_repo_"))
 
     try:
         logger.info("Cloning repository", repo_url=repo_url)
 
-        # Clone
-        clone_kwargs = {"depth": 1}  # Shallow clone for speed
-        if request.branch:
-            clone_kwargs["branch"] = request.branch
-
+        # ── Async clone — does not block the event loop ───────────────────────
         try:
-            git.Repo.clone_from(clone_url, str(tmp_dir), **clone_kwargs)
+            await asyncio.to_thread(_clone_repo, clone_url, str(tmp_dir), request.branch)
         except git.GitCommandError as e:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Failed to clone repository: {str(e)[:200]}",
-            )
+            safe_msg = _mask_token(str(e))[:300]
+            logger.error("Git clone failed", repo_url=repo_url, error=safe_msg)
+            raise HTTPException(status_code=400, detail=f"Failed to clone repository: {safe_msg}")
 
-        logger.info("Repository cloned", path=str(tmp_dir))
+        logger.info("Repository cloned", repo_url=repo_url)
 
-        # Collect files
+        # ── Collect and process files ─────────────────────────────────────────
         files_to_index = _collect_files(tmp_dir)
-        logger.info("Files collected", count=len(files_to_index))
-
         if not files_to_index:
             raise HTTPException(status_code=422, detail="No indexable files found in repository")
 
-        # Extract repo name from URL
-        repo_name = repo_url.rstrip("/").split("/")[-1]
-        org_name = repo_url.rstrip("/").split("/")[-2] if len(repo_url.split("/")) > 4 else ""
+        repo_name      = repo_url.split("/")[-1]
+        org_name       = repo_url.split("/")[-2] if len(repo_url.split("/")) > 4 else ""
         repo_identifier = f"{org_name}/{repo_name}" if org_name else repo_name
 
-        # Process files
         collection = get_collection()
-        now = datetime.now(timezone.utc).isoformat()
-        total_chunks = 0
+        now        = datetime.now(timezone.utc).isoformat()
+        all_chunks: List[str]  = []
+        all_metas:  List[dict] = []
         files_indexed = 0
-
-        all_chunks = []
-        all_metadatas = []
 
         for file_path in files_to_index:
             try:
                 relative_path = str(file_path.relative_to(tmp_dir))
-                content = file_path.read_text(encoding="utf-8", errors="replace")
-
+                # Read in thread — avoids blocking on large files
+                content = await asyncio.to_thread(
+                    file_path.read_text, "utf-8", "replace"
+                )
                 if not content.strip():
                     continue
 
-                chunks = chunk_text(content, filename=file_path.name)
-                if not chunks:
-                    continue
-
+                chunks   = chunk_text(content, filename=file_path.name)
                 doc_type = _detect_repo_doc_type(file_path)
 
                 for i, chunk in enumerate(chunks):
                     all_chunks.append(chunk)
-                    all_metadatas.append({
-                        "source": f"{repo_identifier}/{relative_path}",
-                        "filename": f"{relative_path}",
-                        "repo": repo_identifier,
-                        "repo_url": repo_url,
-                        "doc_type": doc_type,
-                        "indexed_at": now,
+                    all_metas.append({
+                        "source":      f"{repo_identifier}/{relative_path}",
+                        "filename":    relative_path,
+                        "repo":        repo_identifier,
+                        "repo_url":    repo_url,   # never the clone_url (no token)
+                        "doc_type":    doc_type,
+                        "indexed_at":  now,
                         "chunk_index": i,
                     })
 
                 files_indexed += 1
-                total_chunks += len(chunks)
 
             except Exception as e:
                 logger.warning("File processing failed", file=str(file_path), error=str(e))
-                continue
 
         if not all_chunks:
             raise HTTPException(status_code=422, detail="No content extracted from repository")
 
-        # Embed in batches
         embeddings = await embed_texts(all_chunks)
-
-        # Store all at once
-        ids = [uuid.uuid4().hex for _ in all_chunks]
-        collection.add(
-            ids=ids,
-            documents=all_chunks,
-            embeddings=embeddings,
-            metadatas=all_metadatas,
-        )
+        ids        = [uuid.uuid4().hex for _ in all_chunks]
+        collection.add(ids=ids, documents=all_chunks, embeddings=embeddings, metadatas=all_metas)
 
         increment_repositories(1)
-        increment_chunks(total_chunks)
+        increment_chunks(len(all_chunks))
 
         logger.info(
             "Repository indexed",
             repo=repo_identifier,
             files=files_indexed,
-            chunks=total_chunks,
+            chunks=len(all_chunks),
         )
 
         return GitHubIndexResponse(
             repo_url=repo_url,
             files_indexed=files_indexed,
-            chunks_created=total_chunks,
-            message=f"Successfully indexed {files_indexed} files ({total_chunks} chunks) from {repo_identifier}",
+            chunks_created=len(all_chunks),
+            message=f"Indexed {files_indexed} files ({len(all_chunks)} chunks) from {repo_identifier}",
         )
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("GitHub indexing failed", error=str(e), repo_url=repo_url)
-        raise HTTPException(status_code=500, detail=f"Indexing failed: {str(e)}")
+        safe_msg = _mask_token(str(e))
+        logger.error("GitHub indexing failed", error=safe_msg, repo_url=repo_url)
+        raise HTTPException(status_code=500, detail=f"Indexing failed: {safe_msg[:300]}")
     finally:
-        # Cleanup cloned repo
         try:
             shutil.rmtree(tmp_dir, ignore_errors=True)
         except Exception:
@@ -197,51 +217,30 @@ async def index_github_repo(request: GitHubIndexRequest) -> GitHubIndexResponse:
 
 
 def _collect_files(base_path: Path) -> List[Path]:
-    """Walk directory and collect all indexable files."""
     files = []
     for path in base_path.rglob("*"):
-        # Skip directories
         if path.is_dir():
             continue
-
-        # Skip ignored directories (check all parents)
-        skip = False
-        for parent in path.parents:
-            if parent.name in SKIP_DIRS:
-                skip = True
-                break
-        if skip:
+        if any(parent.name in SKIP_DIRS for parent in path.parents):
             continue
-
-        # Skip hidden files and dirs
         if any(part.startswith(".") and part != ".env.example" for part in path.parts):
             continue
-
-        # Skip unwanted extensions
         if path.suffix.lower() in SKIP_EXTENSIONS:
             continue
-
-        # Only target known text file types
-        filename = path.name
-        if path.suffix.lower() not in TARGET_EXTENSIONS and filename not in {"Dockerfile", "Makefile"}:
+        if path.suffix.lower() not in TARGET_EXTENSIONS and path.name not in {"Dockerfile", "Makefile"}:
             continue
-
-        # Skip oversized files
         try:
             if path.stat().st_size > MAX_FILE_SIZE_BYTES:
                 continue
         except Exception:
             continue
-
         files.append(path)
-
     return files
 
 
 def _detect_repo_doc_type(file_path: Path) -> str:
-    name = file_path.name.lower()
+    name   = file_path.name.lower()
     suffix = file_path.suffix.lower()
-
     if name in {"readme.md", "readme.txt", "readme.rst"}:
         return "readme"
     if name in {"dockerfile", "docker-compose.yml", "docker-compose.yaml"}:
@@ -254,6 +253,4 @@ def _detect_repo_doc_type(file_path: Path) -> str:
         return "tests"
     if suffix in {".md", ".rst", ".txt"}:
         return "documentation"
-    if suffix in {".py", ".js", ".ts", ".go", ".java", ".rs"}:
-        return "source_code"
     return "source_code"

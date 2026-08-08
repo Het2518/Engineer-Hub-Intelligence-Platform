@@ -75,6 +75,7 @@ export function FileDropzone() {
     }
   };
 
+
   const removeFile = (id) => {
     setFiles((prev) => prev.filter((f) => f.id !== id));
   };
@@ -89,10 +90,10 @@ export function FileDropzone() {
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
         className={cn(
-          "relative border-2 border-dashed rounded-2xl p-10 text-center transition-all duration-200 shadow-sm bg-card",
+          "relative border-2 border-dashed rounded-[var(--radius)] p-10 text-center transition-all duration-200 shadow-sm bg-background",
           isDragging
-            ? "border-primary/60 bg-primary/5 scale-[1.01]"
-            : "border-border hover:border-primary/30 hover:bg-primary/5"
+            ? "border-[hsl(var(--ring))] bg-[hsl(var(--secondary)/0.5)] scale-[1.01]"
+            : "border-[hsl(var(--border))] hover:border-[hsl(var(--muted-foreground)/0.5)] hover:bg-[hsl(var(--secondary)/0.3)]"
         )}
       >
         <input
@@ -105,26 +106,26 @@ export function FileDropzone() {
 
         <div className="flex flex-col items-center gap-3 pointer-events-none">
           <div className={cn(
-            "w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-200",
+            "w-12 h-12 rounded-[var(--radius)] flex items-center justify-center transition-all duration-200",
             isDragging
-              ? "bg-primary/20 border border-primary/30"
-              : "bg-muted border border-border"
+              ? "bg-[hsl(var(--secondary))] border border-[hsl(var(--ring))]"
+              : "bg-[hsl(var(--secondary)/0.5)] border border-[hsl(var(--border))]"
           )}>
-            <Upload className={cn("w-6 h-6", isDragging ? "text-primary" : "text-muted-foreground")} />
+            <Upload className={cn("w-5 h-5", isDragging ? "text-foreground" : "text-muted-foreground")} />
           </div>
           <div>
             <p className="text-foreground font-medium">
               {isDragging ? "Drop files here" : "Drag & drop files"}
             </p>
             <p className="text-muted-foreground text-sm mt-1">
-              or <span className="text-primary font-medium">click to browse</span>
+              or <span className="text-foreground font-semibold underline underline-offset-2">click to browse</span>
             </p>
           </div>
           <div className="flex flex-wrap justify-center gap-1.5 mt-1">
             {["PDF", "DOCX", "TXT", "MD", "JSON", "CSV", "PNG", "JPG"].map((ext) => (
               <span
                 key={ext}
-                className="text-xs px-2 py-0.5 rounded-md bg-muted text-muted-foreground border border-border font-medium"
+                className="text-[10px] px-1.5 py-0.5 rounded-[var(--radius)] bg-[hsl(var(--secondary))] text-muted-foreground border border-[hsl(var(--border))] font-semibold"
               >
                 {ext}
               </span>
@@ -141,7 +142,7 @@ export function FileDropzone() {
             {pendingCount > 0 && (
               <button
                 onClick={uploadAll}
-                className="px-4 py-1.5 rounded-xl bg-primary hover:bg-secondary text-primary-foreground text-sm font-medium transition-colors shadow-sm"
+                className="px-4 py-1.5 rounded-[var(--radius)] bg-[hsl(var(--primary))] hover:opacity-90 text-[hsl(var(--primary-foreground))] text-sm font-medium transition-colors shadow-sm"
               >
                 Upload {pendingCount} file{pendingCount !== 1 ? "s" : ""}
               </button>
@@ -167,14 +168,14 @@ function FileRow({
   const Icon = isImage ? Image : FileText;
 
   return (
-    <div className="flex items-center gap-3 px-4 py-3 rounded-xl glass border border-border animate-fade-in shadow-sm">
-      <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+    <div className="flex items-center gap-3 px-4 py-3 rounded-[var(--radius)] border border-border animate-fade-in shadow-sm bg-card">
+      <div className="w-8 h-8 rounded-[var(--radius)] bg-[hsl(var(--secondary))] flex items-center justify-center flex-shrink-0">
         <Icon className="w-4 h-4 text-muted-foreground" />
       </div>
 
       <div className="flex-1 min-w-0">
         <p className="text-sm text-foreground font-semibold truncate">{item.file.name}</p>
-        <p className="text-xs text-muted-foreground/80 font-medium">
+        <p className="text-xs text-muted-foreground font-medium">
           {(item.file.size / 1024).toFixed(1)} KB
           {item.result && ` · ${item.result.chunks_created} chunks indexed`}
           {item.error && ` · ${item.error}`}
@@ -185,23 +186,23 @@ function FileRow({
         {item.status === "pending" && (
           <button
             onClick={() => onUpload(item)}
-            className="text-xs font-medium px-3 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors"
+            className="text-xs font-medium px-3 py-1 rounded-[var(--radius)] bg-[hsl(var(--secondary))] text-foreground border border-[hsl(var(--border))] hover:bg-[hsl(var(--secondary)/0.8)] transition-colors"
           >
             Upload
           </button>
         )}
         {item.status === "uploading" && (
-          <Loader2 className="w-4 h-4 text-primary animate-spin" />
+          <Loader2 className="w-4 h-4 text-foreground animate-spin" />
         )}
         {item.status === "success" && (
-          <CheckCircle className="w-4 h-4 text-success" />
+          <CheckCircle className="w-4 h-4 text-muted-foreground" />
         )}
         {item.status === "error" && (
-          <AlertCircle className="w-4 h-4 text-destructive" />
+          <AlertCircle className="w-4 h-4 text-muted-foreground" />
         )}
         <button
           onClick={() => onRemove(item.id)}
-          className="w-6 h-6 rounded-lg hover:bg-foreground/5 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+          className="w-6 h-6 rounded hover:bg-[hsl(var(--secondary))] flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
         >
           <X className="w-3.5 h-3.5" />
         </button>
