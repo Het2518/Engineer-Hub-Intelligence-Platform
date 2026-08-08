@@ -89,7 +89,7 @@ export function MessageInput({ onSend, isLoading, onStop }) {
         </div>
       </div>
 
-      <p className="text-center text-[10px] text-muted-foreground/60 mt-2 font-medium">
+      <p className="text-center text-xs text-muted-foreground/60 mt-2 font-medium">
         Press <kbd className="px-1 py-0.5 rounded bg-muted text-muted-foreground text-[9px]">Enter</kbd> to send
         {" · "}
         <kbd className="px-1 py-0.5 rounded bg-muted text-muted-foreground text-[9px]">Shift+Enter</kbd> for new line

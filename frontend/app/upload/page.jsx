@@ -48,12 +48,12 @@ export default function UploadPage() {
                 key={f.ext}
                 className="flex items-start gap-3 px-3 py-2.5 rounded-xl glass hover:border-primary/40 transition-colors shadow-sm"
               >
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-muted text-muted-foreground flex-shrink-0 mt-0.5">
+                <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-muted text-muted-foreground flex-shrink-0 mt-0.5">
                   {f.ext}
                 </span>
                 <div>
                   <p className="text-xs font-medium text-foreground">{f.name}</p>
-                  <p className="text-[10px] text-muted-foreground">{f.note}</p>
+                  <p className="text-xs text-muted-foreground">{f.note}</p>
                 </div>
               </div>
             ))}

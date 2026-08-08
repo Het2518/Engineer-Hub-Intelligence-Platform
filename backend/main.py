@@ -1,4 +1,4 @@
-"""Engineering Intelligence Hub — FastAPI Application Entry Point."""
+"""AI-Research Assistant — FastAPI Application Entry Point."""
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -29,8 +29,7 @@ async def lifespan(app: FastAPI):
     os.makedirs(settings.upload_dir, exist_ok=True)
     os.makedirs("./vectorstore", exist_ok=True)
 
-    logger.info(
-        "Engineering Intelligence Hub starting",
+    logger.info("AI-Research Assistant starting",
         model=settings.openai_chat_model,
         embedding_model=settings.openai_embedding_model,
         chroma_host=settings.chroma_host,
@@ -49,11 +48,11 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    logger.info("Engineering Intelligence Hub shutting down")
+    logger.info("AI-Research Assistant shutting down")
 
 
 app = FastAPI(
-    title="Engineering Intelligence Hub",
+    title="AI-Research Assistant",
     description="RAG-powered AI assistant for engineering teams",
     version="1.0.0",
     lifespan=lifespan,
@@ -96,6 +95,6 @@ async def health_check():
 
     return {
         "status": "ok",
-        "service": "Engineering Intelligence Hub",
+        "service": "AI-Research Assistant",
         "chromadb": chroma_status,
     }

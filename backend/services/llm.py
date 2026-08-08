@@ -63,6 +63,28 @@ def _build_context(results: List[RetrievalResult]) -> str:
     return "\n\n".join(context_parts)
 
 
+def _build_fallback_answer(question: str, results: List[RetrievalResult]) -> str:
+    """Return a grounded offline response when the model provider is unavailable."""
+    if not results:
+        return (
+            "I couldn't reach the model provider, and there isn't enough retrieved context "
+            "to answer this question right now."
+        )
+
+    lines = [
+        "I couldn't reach the model provider, so here's the best grounded answer I can assemble from the retrieved documents:",
+        "",
+    ]
+
+    for result in results[:3]:
+        snippet = result.content.strip().replace("\n", " ")
+        if len(snippet) > 320:
+            snippet = snippet[:317].rstrip() + "..."
+        lines.append(f"- {snippet} [SOURCE: {result.source}]")
+
+    return "\n".join(lines)
+
+
 async def stream_answer(
     question: str,
     results: List[RetrievalResult],
@@ -113,8 +135,8 @@ Answer the question based on the context above. Include inline citations like [S
             add_message(session_id, "assistant", full_response)
 
     except Exception as e:
-        logger.error("LLM streaming failed", error=str(e))
-        yield "\n\nSorry, something went wrong generating a response. Please try again."
+        logger.error("LLM streaming failed", error=str(e), question=question, session_id=session_id)
+        yield _build_fallback_answer(question, results)
 
 
 async def get_answer(

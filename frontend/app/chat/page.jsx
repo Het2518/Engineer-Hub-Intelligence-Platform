@@ -11,6 +11,7 @@ function ChatPageContent() {
   const searchParams = useSearchParams();
   const urlSessionId = searchParams.get("id");
   const { messages, isLoading, sessionId, sendMessage, stopStreaming, clearMessages, loadSession } = useChat();
+  const sessionLabel = typeof sessionId === "string" && sessionId ? sessionId.split("-")[0] : "";
 
   useEffect(() => {
     if (urlSessionId) {
@@ -23,6 +24,8 @@ function ChatPageContent() {
          clearMessages();
       }
     }
+    // Intentionally react to URL changes only; the current render provides the latest state values.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlSessionId]);
 
   return (
@@ -32,9 +35,9 @@ function ChatPageContent() {
         <div>
           <h1 className="font-semibold text-foreground text-xl flex items-center gap-2">
             Chat
-            {sessionId && (
-              <span className="text-[10px] font-mono bg-accent/10 text-accent px-2 py-0.5 rounded-full border border-accent/20">
-                Memory Active: {sessionId.split('-')[0]}
+            {sessionLabel && (
+              <span className="text-xs font-mono bg-accent/10 text-accent px-2 py-0.5 rounded-full border border-accent/20">
+                Memory Active: {sessionLabel}
               </span>
             )}
           </h1>

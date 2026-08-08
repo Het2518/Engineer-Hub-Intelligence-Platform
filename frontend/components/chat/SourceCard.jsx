@@ -68,12 +68,12 @@ export function SourceCard({ source }) {
         <p className="font-medium truncate">{shortName}</p>
       </div>
       <div className="flex items-center gap-1.5 flex-shrink-0">
-        <span className={cn("text-[10px] font-semibold opacity-70")}>
+        <span className={cn("text-xs font-semibold opacity-70")}>
           {config.label}
         </span>
         <span
           className={cn(
-            "text-[10px] font-bold px-1.5 py-0.5 rounded-md",
+            "text-xs font-bold px-1.5 py-0.5 rounded-md",
             source.confidence >= 80
               ? "bg-success/20 text-success"
               : source.confidence >= 60

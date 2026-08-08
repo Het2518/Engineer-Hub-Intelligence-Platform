@@ -1,4 +1,4 @@
-// API client for the Engineering Intelligence Hub backend
+// API client for the AI-Research Assistant backend
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 

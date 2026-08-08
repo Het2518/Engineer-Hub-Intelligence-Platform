@@ -124,7 +124,7 @@ export function FileDropzone() {
             {["PDF", "DOCX", "TXT", "MD", "JSON", "CSV", "PNG", "JPG"].map((ext) => (
               <span
                 key={ext}
-                className="text-[10px] px-2 py-0.5 rounded-md bg-muted text-muted-foreground border border-border font-medium"
+                className="text-xs px-2 py-0.5 rounded-md bg-muted text-muted-foreground border border-border font-medium"
               >
                 {ext}
               </span>
@@ -174,7 +174,7 @@ function FileRow({
 
       <div className="flex-1 min-w-0">
         <p className="text-sm text-foreground font-semibold truncate">{item.file.name}</p>
-        <p className="text-[10px] text-muted-foreground/80 font-medium">
+        <p className="text-xs text-muted-foreground/80 font-medium">
           {(item.file.size / 1024).toFixed(1)} KB
           {item.result && ` · ${item.result.chunks_created} chunks indexed`}
           {item.error && ` · ${item.error}`}

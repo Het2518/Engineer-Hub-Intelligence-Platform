@@ -23,7 +23,7 @@ export function MessageList({ messages }) {
           <Brain className="w-8 h-8 text-primary" />
         </div>
         <h2 className="text-xl font-semibold text-foreground mb-2">
-          Engineering Intelligence Hub
+          AI-Research Assistant
         </h2>
         <p className="text-muted-foreground max-w-md text-sm leading-relaxed mb-6 font-medium">
           Ask questions about your engineering knowledge base — docs, runbooks, incident reports, and code repositories.
@@ -134,7 +134,7 @@ function MessageBubble({ message }) {
         {/* Sources */}
         {!isUser && message.sources && message.sources.length > 0 && (
           <div className="mt-3">
-            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
               Sources
             </p>
             <div className="flex flex-wrap gap-2">
@@ -148,7 +148,7 @@ function MessageBubble({ message }) {
         {/* Knowledge Cards */}
         {!isUser && message.knowledge_cards && message.knowledge_cards.length > 0 && (
           <div className="mt-3">
-            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
               Key Concepts
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -161,7 +161,7 @@ function MessageBubble({ message }) {
 
         {/* Timing */}
         {!isUser && message.response_time_ms && !message.isStreaming && (
-          <p className="text-[10px] text-muted-foreground/60 mt-2 px-1 font-medium">
+          <p className="text-xs text-muted-foreground/60 mt-2 px-1 font-medium">
             ⚡ {message.response_time_ms.toFixed(0)}ms
           </p>
         )}

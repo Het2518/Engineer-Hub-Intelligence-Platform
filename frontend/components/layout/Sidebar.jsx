@@ -81,7 +81,7 @@ function SidebarContent() {
             <h1 className="font-bold text-foreground text-sm leading-tight">
               Engineer Hub
             </h1>
-            <p className="text-[10px] text-muted-foreground leading-tight mt-0.5 font-medium">
+            <p className="text-xs text-muted-foreground leading-tight mt-0.5 font-medium">
               Intelligence Platform
             </p>
           </div>
@@ -100,7 +100,7 @@ function SidebarContent() {
 
       {/* Nav */}
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-        <p className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest px-3 pt-2 pb-2">
+        <p className="text-xs font-bold text-muted-foreground/60 uppercase tracking-widest px-3 pt-2 pb-2">
           Navigation
         </p>
         {navItems.map((item) => {
@@ -127,7 +127,7 @@ function SidebarContent() {
                 <div className="text-sm font-semibold">{item.label}</div>
                 <div
                   className={cn(
-                    "text-[10px] leading-none mt-1",
+                    "text-xs leading-none mt-1",
                     isActive ? "text-primary/70" : "text-muted-foreground/70"
                   )}
                 >
@@ -143,7 +143,7 @@ function SidebarContent() {
 
         <div className="my-4 border-t border-border/50" />
 
-        <p className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest px-3 pt-2 pb-2">
+        <p className="text-xs font-bold text-muted-foreground/60 uppercase tracking-widest px-3 pt-2 pb-2">
           Recent Chats
         </p>
 
@@ -183,7 +183,7 @@ function SidebarContent() {
         <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-success/10 border border-success/20 shadow-sm">
           <Zap className="w-3.5 h-3.5 text-success flex-shrink-0" />
           <div>
-            <p className="text-[10px] font-bold text-success">GPT-4o Powered</p>
+            <p className="text-xs font-bold text-success">GPT-4o Powered</p>
             <p className="text-[9px] text-success/70 font-medium">RAG + Hybrid Search</p>
           </div>
         </div>

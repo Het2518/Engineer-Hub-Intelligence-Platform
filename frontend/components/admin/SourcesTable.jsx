@@ -67,13 +67,13 @@ export function SourcesTable({ sources, totalChunks }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/20">
-              <th className="text-left px-4 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+              <th className="text-left px-4 py-3 text-xs font-bold text-muted-foreground uppercase tracking-wider">
                 Type
               </th>
-              <th className="text-left px-4 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+              <th className="text-left px-4 py-3 text-xs font-bold text-muted-foreground uppercase tracking-wider">
                 Filename
               </th>
-              <th className="text-left px-4 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-wider hidden md:table-cell">
+              <th className="text-left px-4 py-3 text-xs font-bold text-muted-foreground uppercase tracking-wider hidden md:table-cell">
                 Indexed At
               </th>
             </tr>
@@ -97,7 +97,7 @@ export function SourcesTable({ sources, totalChunks }) {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <Icon className={cn("w-3.5 h-3.5 flex-shrink-0", config.color)} />
-                        <span className={cn("text-[10px] font-bold", config.color)}>
+                        <span className={cn("text-xs font-bold", config.color)}>
                           {config.label}
                         </span>
                       </div>

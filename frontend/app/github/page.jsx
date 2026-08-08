@@ -122,7 +122,7 @@ export default function GitHubPage() {
           </button>
 
           {isLoading && (
-            <p className="text-[10px] text-center text-muted-foreground">
+            <p className="text-xs text-center text-muted-foreground">
               This may take a few minutes for large repositories...
             </p>
           )}

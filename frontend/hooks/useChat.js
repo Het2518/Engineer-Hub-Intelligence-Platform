@@ -10,7 +10,7 @@ export function useChat() {
       if (saved) {
         try {
           return JSON.parse(saved);
-        } catch (e) {}
+      } catch {}
       }
     }
     return [];
@@ -112,7 +112,7 @@ export function useChat() {
     } catch {
       setIsLoading(false);
     }
-  }, [isLoading]);
+  }, [isLoading, sessionId]);
 
   const stopStreaming = useCallback(() => {
     abortRef.current?.abort();
