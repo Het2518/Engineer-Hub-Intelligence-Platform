@@ -28,9 +28,22 @@ def get_chroma_client() -> chromadb.PersistentClient:
 def get_collection():
     settings = get_settings()
     client = get_chroma_client()
+    
+    embedding_function = None
+    if settings.hf_token:
+        from chromadb.utils import embedding_functions
+        logger.info("Using HuggingFace Inference API for embeddings")
+        embedding_function = embedding_functions.HuggingFaceEmbeddingFunction(
+            api_key=settings.hf_token,
+            model_name="sentence-transformers/all-MiniLM-L6-v2"
+        )
+    else:
+        logger.warning("HF_TOKEN not set! Embeddings will run locally and may crash free tiers.")
+
     collection = client.get_or_create_collection(
         name=settings.chroma_collection,
         metadata={"hnsw:space": "cosine"},
+        embedding_function=embedding_function
     )
     return collection
 

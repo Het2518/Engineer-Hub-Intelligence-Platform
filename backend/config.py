@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     # ── LLM Provider ────────────────────────────────────────────────────────
     # Groq API configuration (OpenAI-compatible)
     groq_api_key: str = Field(..., env="GROQ_API_KEY")
+    hf_token: str = Field(default="", env="HF_TOKEN")
     llm_chat_model: str = Field(default="llama-3.3-70b-versatile", env="LLM_CHAT_MODEL")
     llm_base_url: str = Field(default="https://api.groq.com/openai/v1", env="LLM_BASE_URL")
 
