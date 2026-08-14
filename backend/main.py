@@ -14,12 +14,13 @@ from dotenv import load_dotenv
 load_dotenv()  # Load .env into os.environ for LangSmith/LangChain
 
 import structlog
-from fastapi import FastAPI, Depends, HTTPException, Security
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from config import get_settings
+from core.limiter import limiter
+from core.security import verify_api_key
 from routers import upload, github, chat, sources, stats
 from routers import knowledge as knowledge_router
 
@@ -32,20 +33,6 @@ structlog.configure(
 logger = structlog.get_logger()
 
 settings = get_settings()
-
-# ── API Key Auth ──────────────────────────────────────────────────────────────
-
-security = HTTPBearer(auto_error=False)
-
-def verify_api_key(credentials: HTTPAuthorizationCredentials = Security(security)):
-    if not settings.api_key:
-        return
-    if not credentials or credentials.credentials != settings.api_key:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid or missing API Key",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
 
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
@@ -97,9 +84,6 @@ async def lifespan(app: FastAPI):
     logger.info("AI-Research Assistant v2 shutting down")
 
 
-# ── Rate Limiter ──────────────────────────────────────────────────────────────
-
-from limiter import limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
 

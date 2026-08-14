@@ -1,12 +1,18 @@
-// API client for the AI-Research Assistant backend
+/**
+ * lib/api.js — HTTP client for the AI-Research Assistant backend.
+ *
+ * All network calls go through this module so the backend URL
+ * is never hard-coded in component or hook files.
+ */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { API_BASE } from "./constants";
 
 class ApiClient {
   constructor(base) {
     this.base = base;
   }
 
+  /** Upload and index a document into the knowledge base. */
   async uploadFile(file) {
     const form = new FormData();
     form.append("file", file);
@@ -24,6 +30,7 @@ class ApiClient {
     return res.json();
   }
 
+  /** Extract text from a file for use in a single chat context (not indexed). */
   async parseChatFile(file) {
     const form = new FormData();
     form.append("file", file);
@@ -41,6 +48,7 @@ class ApiClient {
     return res.json();
   }
 
+  /** Index a GitHub repository into the knowledge base. */
   async indexGitHub(repoUrl, branch) {
     const res = await fetch(`${this.base}/github-index`, {
       method: "POST",
@@ -56,6 +64,7 @@ class ApiClient {
     return res.json();
   }
 
+  /** Non-streaming chat — returns the full answer in one response. */
   async chatNonStreaming(question, filterDocType) {
     const res = await fetch(`${this.base}/chat`, {
       method: "POST",
@@ -71,35 +80,33 @@ class ApiClient {
     return res.json();
   }
 
-  chatStream(question, filterDocType) {
-    return null; 
-  }
-
+  /** Return the list of indexed document sources. */
   async getSources() {
     const res = await fetch(`${this.base}/sources`);
     if (!res.ok) throw new Error("Failed to fetch sources");
     return res.json();
   }
 
+  /** Return admin usage stats. */
   async getStats() {
     const res = await fetch(`${this.base}/stats`);
     if (!res.ok) throw new Error("Failed to fetch stats");
     return res.json();
   }
 
+  /** Returns true if the backend is reachable. */
   async healthCheck() {
     try {
-      const res = await fetch(`${this.base}/health`, { signal: AbortSignal.timeout(3000) });
+      const res = await fetch(`${this.base}/health`, {
+        signal: AbortSignal.timeout(3000),
+      });
       return res.ok;
     } catch {
       return false;
     }
   }
 
-  getStreamUrl(question) {
-    return `${this.base}/chat`;
-  }
-
+  /** Return the base URL (used by streaming.js to build the /chat endpoint). */
   getBase() {
     return this.base;
   }

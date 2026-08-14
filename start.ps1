@@ -11,15 +11,18 @@ Write-Host "║  Hybrid OKF + Multi-RAG Platform                     ║" -Foreg
 Write-Host "╚══════════════════════════════════════════════════════╝" -ForegroundColor Cyan
 Write-Host ""
 
-$ROOT = $PSScriptRoot
-$BACKEND = Join-Path $ROOT "backend"
+$ROOT     = $PSScriptRoot
+$BACKEND  = Join-Path $ROOT "backend"
 $FRONTEND = Join-Path $ROOT "frontend"
+$LOGS     = Join-Path $ROOT "logs"
 
-# ── Pre-checks ──────────────────────────────────────────────────────────────
+# ── Ensure logs directory exists ─────────────────────────────────────────────
+New-Item -ItemType Directory -Force $LOGS | Out-Null
 
-if (-not (Test-Path (Join-Path $BACKEND ".env")) -and -not (Test-Path (Join-Path $ROOT ".env"))) {
-    Write-Host "[WARN] No .env file found. Copy .env.example to .env and fill in your API key." -ForegroundColor Yellow
-    Write-Host "       backend\.env  or  .env (project root)" -ForegroundColor Yellow
+# ── Pre-checks ───────────────────────────────────────────────────────────────
+
+if (-not (Test-Path (Join-Path $BACKEND ".env"))) {
+    Write-Host "[WARN] No backend/.env found. Copy .env.example to backend/.env and set your API keys." -ForegroundColor Yellow
     Write-Host ""
 }
 
@@ -30,23 +33,23 @@ if (-not (Test-Path (Join-Path $FRONTEND "node_modules"))) {
     Pop-Location
 }
 
-# ── Start Backend ────────────────────────────────────────────────────────────
+# ── Start Backend ─────────────────────────────────────────────────────────────
 
 Write-Host "[1/2] Starting FastAPI backend on http://localhost:8000 ..." -ForegroundColor Green
 $backendJob = Start-Job -ScriptBlock {
-    param($dir)
+    param($dir, $logFile)
     Set-Location $dir
-    python -m uvicorn main:app --reload --port 8000 --host 0.0.0.0
-} -ArgumentList $BACKEND
+    python -m uvicorn main:app --reload --port 8000 --host 0.0.0.0 2>&1 | Tee-Object -FilePath $logFile
+} -ArgumentList $BACKEND, (Join-Path $LOGS "backend.log")
 
 # ── Start Frontend ────────────────────────────────────────────────────────────
 
 Write-Host "[2/2] Starting Next.js frontend on http://localhost:3000 ..." -ForegroundColor Green
 $frontendJob = Start-Job -ScriptBlock {
-    param($dir)
+    param($dir, $logFile)
     Set-Location $dir
-    npm run dev
-} -ArgumentList $FRONTEND
+    npm run dev 2>&1 | Tee-Object -FilePath $logFile
+} -ArgumentList $FRONTEND, (Join-Path $LOGS "frontend.log")
 
 Write-Host ""
 Write-Host "══════════════════════════════════════════════════════" -ForegroundColor Cyan
@@ -54,6 +57,7 @@ Write-Host "  Frontend : http://localhost:3000" -ForegroundColor White
 Write-Host "  Backend  : http://localhost:8000" -ForegroundColor White
 Write-Host "  API Docs : http://localhost:8000/docs" -ForegroundColor White
 Write-Host "  Health   : http://localhost:8000/health" -ForegroundColor White
+Write-Host "  Logs     : $LOGS" -ForegroundColor DarkGray
 Write-Host "══════════════════════════════════════════════════════" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Press Ctrl+C to stop both services." -ForegroundColor DarkGray

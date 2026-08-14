@@ -16,11 +16,11 @@ from typing import List
 import asyncio
 
 from fastapi import APIRouter, File, UploadFile, HTTPException
-from pydantic import BaseModel
 
 from config import get_settings
 from db.chroma import get_collection
 from db.stats_store import increment_documents, increment_chunks
+from schemas.upload import UploadResponse, ParseResponse
 from services.ingestion import extract_text
 from services.chunking import chunk_text
 from services.embedding import embed_texts
@@ -37,13 +37,6 @@ ALLOWED_EXTENSIONS = {
 CHUNK_SIZE   = 64 * 1024          # 64 KB streaming chunks
 MAX_BYTES    = settings.max_file_size_mb * 1024 * 1024
 MAX_TEXT_LEN = 500_000            # chars — prevents token budget explosion
-
-
-class UploadResponse(BaseModel):
-    filename: str
-    chunks_created: int
-    doc_type: str
-    message: str
 
 
 def _sanitize_filename(raw: str) -> str:
@@ -82,7 +75,7 @@ def _check_duplicate(content_hash: str) -> bool:
     return bool(results.get("metadatas"))
 
 
-from limiter import limiter
+from core.limiter import limiter
 from fastapi import Request
 
 @router.post("/upload", response_model=UploadResponse)
@@ -215,11 +208,6 @@ async def upload_document(request: Request, file: UploadFile = File(...)) -> Upl
     finally:
         pass
 
-
-class ParseResponse(BaseModel):
-    filename: str
-    content: str
-    mime_type: str
 
 @router.post("/chat/parse-file", response_model=ParseResponse)
 @limiter.limit("20/minute")

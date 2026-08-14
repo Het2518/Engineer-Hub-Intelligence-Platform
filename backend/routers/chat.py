@@ -13,8 +13,14 @@ from typing import Optional, AsyncIterator
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
 
+from schemas.chat import (
+    AttachedFile,
+    ChatRequest,
+    ChatResponse,
+    RenameRequest,
+    Source,
+)
 from services.retrieval import hybrid_search, RetrievalResult
 from services.llm import stream_answer
 from services.memory import get_all_sessions, get_history, delete_session, rename_session
@@ -24,42 +30,6 @@ import structlog
 
 logger = structlog.get_logger()
 router = APIRouter()
-
-MAX_QUESTION_LENGTH = 4000
-
-
-class AttachedFile(BaseModel):
-    filename: str
-    content: str
-    mime_type: Optional[str] = None
-
-class ChatRequest(BaseModel):
-    question: str = Field(..., min_length=1, max_length=MAX_QUESTION_LENGTH)
-    stream: bool = True
-    filter_doc_type: Optional[str] = None
-    session_id: Optional[str] = None
-    attached_files: Optional[list[AttachedFile]] = None
-
-
-class RenameRequest(BaseModel):
-    title: str = Field(..., min_length=1, max_length=100)
-
-
-class Source(BaseModel):
-    filename: str
-    doc_type: str
-    confidence: int
-    content_preview: str
-    is_okf: bool = False
-    trust_level: str = ""
-    okf_type: str = ""
-    match_reason: str = ""
-
-
-class ChatResponse(BaseModel):
-    answer: str
-    sources: list[Source]
-    response_time_ms: float
 
 
 def _format_sources(results: list[RetrievalResult]) -> list[Source]:
@@ -88,7 +58,7 @@ def _format_sources(results: list[RetrievalResult]) -> list[Source]:
     return sources
 
 
-from limiter import limiter
+from core.limiter import limiter
 from fastapi import Request
 
 @router.post("/chat")

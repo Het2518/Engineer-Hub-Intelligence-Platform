@@ -1,6 +1,6 @@
 // SSE streaming utility for chat responses
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { API_BASE } from "./constants";
 
 export async function streamChat(
   question,

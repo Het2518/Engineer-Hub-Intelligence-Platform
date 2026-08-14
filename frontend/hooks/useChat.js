@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { streamChat } from "../lib/streaming";
+import { API_BASE } from "../lib/constants";
 
 export function useChat() {
   // Always start with empty/default state to match SSR — hydrate from
@@ -186,8 +187,7 @@ export function useChat() {
     stopStreaming();
     setIsLoading(true);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const res = await fetch(`${apiUrl}/chat/sessions/${id}`);
+      const res = await fetch(`${API_BASE}/chat/sessions/${id}`);
       if (res.ok) {
         const data = await res.json();
         const formatted = (data.messages || []).map((m, i) => ({

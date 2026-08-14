@@ -13,57 +13,18 @@ Endpoints:
 """
 from typing import Optional
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 import structlog
 
+from schemas.knowledge import (
+    OKFDocumentSummary,
+    OKFDocumentFull,
+    CreateDocumentRequest,
+    UpdateDocumentRequest,
+)
 from services.okf_reader import get_okf_reader, OKFDocument
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/knowledge", tags=["Knowledge"])
-
-
-# ── Pydantic Models ───────────────────────────────────────────────────────────
-
-class OKFDocumentSummary(BaseModel):
-    source_id: str
-    okf_type: str
-    title: str
-    description: str
-    tags: list[str]
-    resource: str
-    timestamp: Optional[str]
-    trust_level: str
-    is_stale: bool
-    category: str
-    content_preview: str
-
-
-class OKFDocumentFull(OKFDocumentSummary):
-    content: str
-    links: list[tuple[str, str]]
-    provenance: dict
-    trust: dict
-
-
-class CreateDocumentRequest(BaseModel):
-    okf_type: str
-    title: str
-    description: str = ""
-    tags: list[str] = []
-    content: str
-    resource: str = ""
-    trust_verified: bool = False
-    author: str = ""
-
-
-class UpdateDocumentRequest(BaseModel):
-    title: str
-    description: str = ""
-    tags: list[str] = []
-    content: str
-    resource: str = ""
-    trust_verified: bool = False
-    author: str = ""
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
