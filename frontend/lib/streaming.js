@@ -68,11 +68,15 @@ export async function streamChat(
 
 function handleEvent(event, callbacks) {
   switch (event.type) {
+    case "cache_hit":
+      callbacks.onCacheHit?.(event.similarity ?? 1.0);
+      break;
     case "thinking":
       callbacks.onThinking?.({
         okf_sources: event.okf_sources || 0,
         rag_sources: event.rag_sources || 0,
         total: event.total || 0,
+        tier: event.tier || "normal",
       });
       break;
     case "sources":
@@ -86,6 +90,8 @@ function handleEvent(event, callbacks) {
         response_time_ms: event.response_time_ms,
         context_used: event.context_used || 0,
         okf_sources: event.okf_sources || 0,
+        cache_hit: event.cache_hit || false,
+        tier: event.tier || "normal",
       });
       break;
     case "error":

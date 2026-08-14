@@ -14,19 +14,17 @@ import hashlib
 import math
 from typing import List, Dict, Any, Tuple
 
-from rank_bm25 import BM25Okapi
-
 from db.chroma import get_collection
 from services.embedding import embed_query
+from services.bm25_cache import get_bm25_cache
 from config import get_settings
 import structlog
 
 logger = structlog.get_logger()
 settings = get_settings()
 
-# Maximum number of documents fetched into memory for the BM25 corpus.
-# Increase only if your knowledge base is large AND you have sufficient RAM.
-BM25_CORPUS_LIMIT = 200
+# BM25_CORPUS_LIMIT retired — BM25 now served from the precomputed bm25_cache module.
+# The precomputed index is built once at startup and invalidated on upload.
 
 
 class RetrievalResult:
@@ -84,10 +82,10 @@ async def hybrid_search(
     use_okf: bool = True,
 ) -> List[RetrievalResult]:
     """
-    V2 Hybrid search pipeline:
-    0. OKF Layer  — deterministic knowledge/ bundle lookup (parallel with steps 1-3)
-    1. Vector search  (ChromaDB cosine similarity + HyDE)
-    2. BM25 keyword search
+    V3 Hybrid search pipeline (latency-optimised):
+    0. OKF Layer  — deterministic knowledge/ bundle lookup (parallel)
+    1. Vector search  — ChromaDB cosine similarity
+    2. BM25 keyword search — precomputed index (no per-query corpus reload)
     3. Reciprocal Rank Fusion (RRF) score combination
     4. MMR diversity re-ranking
     5. Merge: OKF first (trust-boosted), then deduplicated RAG results
@@ -135,30 +133,20 @@ async def hybrid_search(
     # ChromaDB returns cosine distance in [0, 2]; convert to similarity in [0, 1]
     vector_scores = [max(0.0, 1.0 - (d / 2.0)) for d in vector_dists]
 
-    # ── 2. BM25 Keyword Search ──────────────────────────────────────────────
-    # Limit corpus to BM25_CORPUS_LIMIT to prevent OOM on large knowledge bases
-    all_data = collection.get(
-        include=["documents", "metadatas"],
-        limit=BM25_CORPUS_LIMIT,
-        where=where_filter,
-    )
-    all_docs  = all_data.get("documents") or []
-    all_metas = all_data.get("metadatas") or []
-
-    bm25_results: List[Tuple[int, float]] = []
-    if all_docs:
-        tokenized     = [doc.lower().split() for doc in all_docs]
-        bm25          = BM25Okapi(tokenized)
-        query_tokens  = question.lower().split()
-        scores        = bm25.get_scores(query_tokens)  # numpy array
-
-        top_indices   = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:vector_k]
-        # Use len(scores) > 0 instead of scores.any() — works for both numpy and lists
-        max_score     = float(max(scores)) if len(scores) > 0 else 1.0
-        bm25_results  = [
-            (i, float(scores[i]) / max_score if max_score > 0 else 0.0)
-            for i in top_indices
-        ]
+    # ── 2. BM25 Keyword Search (precomputed index) ──────────────────────────
+    # The BM25 index is built once at startup and kept in memory.
+    # This eliminates the 300-600ms per-query corpus reload from ChromaDB.
+    # that previously ran on every single query.
+    bm25_raw_results: List[Tuple[str, dict, float]] = []
+    bm25_cache = get_bm25_cache()
+    if bm25_cache.size > 0:
+        query_tokens = question.lower().split()
+        where_for_bm25 = {"doc_type": filter_doc_type} if filter_doc_type else None
+        bm25_raw_results = bm25_cache.search(
+            query_tokens,
+            top_k=vector_k,
+            where=where_for_bm25,
+        )
 
     # ── 3. Reciprocal Rank Fusion ───────────────────────────────────────────
     # Key: MD5 hash of full content — no false collisions from prefix matching
@@ -175,19 +163,16 @@ async def hybrid_search(
             }
         candidate_map[key]["rrf_score"] += 1.0 / (60 + rank + 1)
 
-    for rank, (idx, score) in enumerate(bm25_results):
-        if idx < len(all_docs):
-            doc  = all_docs[idx]
-            meta = all_metas[idx]
-            key  = _content_key(doc)
-            if key not in candidate_map:
-                candidate_map[key] = {
-                    "content": doc,
-                    "metadata": meta,
-                    "rrf_score": 0.0,
-                    "vector_score": score,
-                }
-            candidate_map[key]["rrf_score"] += 1.0 / (60 + rank + 1)
+    for rank, (doc, meta, score) in enumerate(bm25_raw_results):
+        key = _content_key(doc)
+        if key not in candidate_map:
+            candidate_map[key] = {
+                "content": doc,
+                "metadata": meta,
+                "rrf_score": 0.0,
+                "vector_score": score,
+            }
+        candidate_map[key]["rrf_score"] += 1.0 / (60 + rank + 1)
 
     # Sort candidates by fused RRF score to select a subset for expensive Cross-Encoder
     candidates = sorted(candidate_map.values(), key=lambda x: x["rrf_score"], reverse=True)

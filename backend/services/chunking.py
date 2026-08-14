@@ -96,3 +96,85 @@ def _chunk_markdown(text: str) -> list[str]:
     except Exception as e:
         logger.warning("Markdown chunking failed, falling back to generic splitter", error=str(e))
         return _chunk_generic(text)
+
+
+# ── V3: Contextual Chunking (Anthropic method) ────────────────────────────────
+
+_CONTEXT_PROMPT = """\
+Here is a document excerpt:
+<document>
+{doc_preview}
+</document>
+
+Here is a chunk from that document:
+<chunk>
+{chunk}
+</chunk>
+
+Please give a short (1-2 sentence) context that situates this chunk within the overall \
+document. Focus on: what topic this chunk covers, and where it fits in the document. \
+Be extremely concise. Output only the context, nothing else."""
+
+
+async def contextual_chunk_text(
+    text: str,
+    filename: str = "",
+    doc_preview_chars: int = 500,
+) -> list[str]:
+    """Generate contextually enriched chunks using the Anthropic method.
+
+    Each chunk gets a 1-sentence LLM-generated context prefix prepended before
+    embedding, which dramatically improves retrieval precision.
+
+    NOTE: This adds ~0.5–2s per document at upload time (not at query time).
+    Enable with CONTEXTUAL_CHUNKING_ENABLED=true in backend/.env.
+
+    Research: Anthropic reports 49–67% reduction in retrieval failures.
+    """
+    raw_chunks = chunk_text(text, filename)
+    if not raw_chunks:
+        return []
+
+    try:
+        from openai import AsyncOpenAI
+        from config import get_settings
+        s = get_settings()
+        client = AsyncOpenAI(
+            api_key=s.groq_api_key,
+            base_url=s.llm_base_url,
+        )
+        doc_preview = text[:doc_preview_chars].strip()
+        contextual_chunks = []
+
+        for chunk in raw_chunks:
+            try:
+                resp = await client.chat.completions.create(
+                    model="llama-3.1-8b-instant",   # Use fast 8B model for context generation
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": _CONTEXT_PROMPT.format(
+                                doc_preview=doc_preview,
+                                chunk=chunk[:600],
+                            ),
+                        }
+                    ],
+                    temperature=0.0,
+                    max_tokens=80,
+                )
+                context_prefix = resp.choices[0].message.content.strip()
+                contextual_chunks.append(f"{context_prefix}\n\n{chunk}")
+            except Exception as e:
+                logger.warning("Context generation failed for chunk, using raw", error=str(e))
+                contextual_chunks.append(chunk)
+
+        logger.info(
+            "Contextual chunking complete",
+            filename=filename,
+            chunks=len(contextual_chunks),
+        )
+        return contextual_chunks
+
+    except Exception as e:
+        logger.error("Contextual chunking failed entirely, returning raw chunks", error=str(e))
+        return raw_chunks

@@ -40,10 +40,17 @@ async def get_system_stats() -> StatsResponse:
 
 
 from fastapi import BackgroundTasks
-from services.evaluation import run_ragas_evaluation
 
 @router.post("/stats/evaluate")
 async def trigger_evaluation(background_tasks: BackgroundTasks):
-    """Trigger a background job to evaluate recent RAG responses."""
+    """Trigger a background job to evaluate recent RAG responses (requires RAGAS package)."""
+    try:
+        from services.evaluation import run_ragas_evaluation
+    except ImportError:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=503,
+            detail="Evaluation service not available. Install the 'ragas' package to enable."
+        )
     background_tasks.add_task(run_ragas_evaluation)
     return {"message": "Evaluation job started in the background"}

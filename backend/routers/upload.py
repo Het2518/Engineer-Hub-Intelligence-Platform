@@ -145,7 +145,12 @@ async def upload_document(request: Request, file: UploadFile = File(...)) -> Upl
             text = text[:MAX_TEXT_LEN]
 
         # ── Chunk ───────────────────────────────────────────────────────────
-        chunks = chunk_text(text, filename=safe_name)
+        # ── V3: Contextual chunking (Anthropic method) — opt-in via .env ──────
+        if settings.contextual_chunking_enabled:
+            from services.chunking import contextual_chunk_text
+            chunks = await contextual_chunk_text(text, filename=file.filename or "")
+        else:
+            chunks = chunk_text(text, filename=safe_name)
         if not chunks:
             raise HTTPException(status_code=422, detail="No content chunks generated")
 
@@ -174,6 +179,22 @@ async def upload_document(request: Request, file: UploadFile = File(...)) -> Upl
         increment_chunks(len(chunks))
 
         logger.info("Document indexed", filename=safe_name, chunks=len(chunks), doc_type=doc_type)
+
+        # ── V3: Invalidate caches (new doc may change answers) ──────────────
+        try:
+            from services.bm25_cache import get_bm25_cache
+            get_bm25_cache().invalidate()
+            # Rebuild async so next query gets fresh BM25
+            import asyncio
+            asyncio.create_task(get_bm25_cache().rebuild())
+        except Exception as e:
+            logger.warning("BM25 cache invalidation failed (non-critical)", error=str(e))
+
+        try:
+            from services.semantic_cache import get_semantic_cache
+            get_semantic_cache().invalidate()
+        except Exception as e:
+            logger.warning("Semantic cache invalidation failed (non-critical)", error=str(e))
 
         # ── V2: OKF Dual-Index (background, non-blocking) ───────────────────
         okf_path = None

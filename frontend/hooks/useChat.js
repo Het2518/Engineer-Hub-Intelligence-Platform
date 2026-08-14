@@ -11,6 +11,7 @@ export function useChat() {
   const [isLoading, setIsLoading] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [thinkingMeta, setThinkingMeta] = useState(null);
+  const [isCacheHit, setIsCacheHit] = useState(false);
   const [sessionId, setSessionId] = useState("");
   const abortRef = useRef(null);
   const [hydrated, setHydrated] = useState(false);
@@ -83,7 +84,12 @@ export function useChat() {
       await streamChat(
         question,
         {
+          onCacheHit: () => {
+            setIsCacheHit(true);
+            setIsThinking(false);
+          },
           onThinking: (meta) => {
+            setIsCacheHit(false);
             setIsThinking(true);
             setThinkingMeta(meta);
           },
@@ -110,15 +116,16 @@ export function useChat() {
               }, 50);
             }
           },
-          onDone: ({ response_time_ms, context_used, okf_sources }) => {
+          onDone: ({ response_time_ms, context_used, okf_sources, cache_hit, tier }) => {
             if (flushTimer) clearTimeout(flushTimer);
             flushTokens();
             setIsThinking(false);
             setThinkingMeta(null);
+            setIsCacheHit(false);
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantMsgId
-                  ? { ...m, isStreaming: false, response_time_ms, context_used, okf_sources }
+                  ? { ...m, isStreaming: false, response_time_ms, context_used, okf_sources, cache_hit, tier }
                   : m
               )
             );
@@ -214,6 +221,7 @@ export function useChat() {
     isLoading,
     isThinking,
     thinkingMeta,
+    isCacheHit,
     sessionId,
     sendMessage,
     stopStreaming,

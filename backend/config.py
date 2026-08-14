@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     # Groq API configuration (OpenAI-compatible)
     groq_api_key: str = Field(..., env="GROQ_API_KEY")
     hf_token: str = Field(default="", env="HF_TOKEN")
-    llm_chat_model: str = Field(default="llama-3.3-70b-versatile", env="LLM_CHAT_MODEL")
+    llm_chat_model: str = Field(default="llama-3.3-70b-specdec", env="LLM_CHAT_MODEL")
     llm_base_url: str = Field(default="https://api.groq.com/openai/v1", env="LLM_BASE_URL")
 
     # ── ChromaDB (local PersistentClient — no Docker needed) ────────────────
@@ -56,6 +56,19 @@ class Settings(BaseSettings):
     crag_enabled: bool = Field(default=True, env="CRAG_ENABLED")
     self_rag_critique: bool = Field(default=True, env="SELF_RAG_CRITIQUE")
     web_search_fallback: bool = Field(default=False, env="WEB_SEARCH_FALLBACK")
+
+    # ── V3: Semantic Cache ────────────────────────────────────────────────────
+    semantic_cache_enabled: bool = Field(default=True, env="SEMANTIC_CACHE_ENABLED")
+    semantic_cache_similarity_threshold: float = Field(default=0.92, env="SEMANTIC_CACHE_THRESHOLD")
+    semantic_cache_max_size: int = Field(default=500, env="SEMANTIC_CACHE_MAX_SIZE")
+    semantic_cache_ttl_seconds: int = Field(default=3600, env="SEMANTIC_CACHE_TTL")
+
+    # ── V3: Contextual Chunking (Anthropic method) ────────────────────────────
+    contextual_chunking_enabled: bool = Field(default=False, env="CONTEXTUAL_CHUNKING_ENABLED")
+
+    # ── V3: Smart Query Router ────────────────────────────────────────────────
+    smart_router_enabled: bool = Field(default=True, env="SMART_ROUTER_ENABLED")
+    simple_query_max_chars: int = Field(default=120, env="SIMPLE_QUERY_MAX_CHARS")
 
     class Config:
         env_file = ".env"

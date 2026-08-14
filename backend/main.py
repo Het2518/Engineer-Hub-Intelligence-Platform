@@ -69,6 +69,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error("ChromaDB connection failed — will retry on first request", error=str(e))
 
+    # Warm up BM25 precomputed index
+    try:
+        from services.bm25_cache import get_bm25_cache
+        bm25 = get_bm25_cache()
+        await bm25.rebuild()
+        logger.info("BM25 index warmed up", corpus_size=bm25.size)
+    except Exception as e:
+        logger.warning("BM25 warm-up failed — will build on first query", error=str(e))
+
     # Pre-load OKF knowledge bundle
     if settings.okf_enabled:
         try:
@@ -123,6 +132,52 @@ app.include_router(sources.router,            tags=["Knowledge Base"])
 app.include_router(stats.router,              tags=["Admin"])
 app.include_router(knowledge_router.router,   tags=["Knowledge"])   # ← V2: OKF
 
+
+# ── Cache & Analytics Endpoints ─────────────────────────────────────────────
+
+@app.get("/cache/stats", tags=["Admin"])
+async def cache_stats():
+    """Return semantic cache statistics (hit rate, size, TTL)."""
+    from services.semantic_cache import get_semantic_cache
+    return get_semantic_cache().stats
+
+
+@app.post("/cache/clear", tags=["Admin"])
+async def cache_clear():
+    """Force-clear the semantic cache (e.g. after bulk document uploads)."""
+    from services.semantic_cache import get_semantic_cache
+    count = await get_semantic_cache().clear()
+    return {"status": "cleared", "entries_removed": count}
+
+
+@app.get("/analytics/pipeline", tags=["Admin"])
+async def pipeline_analytics():
+    """Return pipeline health info: BM25 index size, cache stats, ChromaDB chunks."""
+    from services.bm25_cache import get_bm25_cache
+    from services.semantic_cache import get_semantic_cache
+
+    bm25 = get_bm25_cache()
+    cache = get_semantic_cache()
+
+    chroma_count = 0
+    try:
+        from db.chroma import get_collection
+        chroma_count = get_collection().count()
+    except Exception:
+        pass
+
+    return {
+        "bm25_index": {
+            "corpus_size": bm25.size,
+            "built_at": bm25.built_at,
+            "ready": bm25.size > 0,
+        },
+        "semantic_cache": cache.stats,
+        "chromadb": {"chunks": chroma_count},
+        "model": settings.llm_chat_model,
+        "smart_router": settings.smart_router_enabled,
+        "contextual_chunking": settings.contextual_chunking_enabled,
+    }
 
 # ── Health ────────────────────────────────────────────────────────────────────
 

@@ -1,14 +1,30 @@
 "use client";
 
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import { cn } from "../../lib/utils";
 import { StreamingMessage } from "./StreamingMessage";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { ThinkingIndicator } from "./ThinkingIndicator";
-import { AlertCircle, ChevronDown, ChevronUp, FileText } from "lucide-react";
+import { FollowUpSuggestions } from "./FollowUpSuggestions";
+import {
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  FileText,
+  Zap,
+  Timer,
+  BookOpen,
+  Cpu,
+} from "lucide-react";
 
-/* ─── Main export ─────────────────────────────────────────────── */
-export function MessageList({ messages, isThinking, thinkingMeta }) {
+/* ─── Main export ──────────────────────────────────────────────────────────── */
+export function MessageList({
+  messages,
+  isThinking,
+  thinkingMeta,
+  isCacheHit = false,
+  onFollowUp,
+}) {
   const bottomRef = useRef(null);
 
   useEffect(() => {
@@ -18,6 +34,14 @@ export function MessageList({ messages, isThinking, thinkingMeta }) {
   if (messages.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8 text-center h-full animate-fade-in">
+        <div className="mb-6 relative">
+          <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center">
+            <BookOpen className="w-6 h-6 text-primary" />
+          </div>
+          <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center">
+            <Cpu className="w-3 h-3 text-emerald-400" />
+          </div>
+        </div>
         <h1 className="text-[1.35rem] font-semibold mb-1.5 tracking-tight text-foreground">
           Engineer Hub
         </h1>
@@ -26,8 +50,19 @@ export function MessageList({ messages, isThinking, thinkingMeta }) {
         </p>
         <div className="flex items-center justify-center gap-6">
           {EXAMPLE_QUESTIONS.map((q) => (
-            <ExampleQuestion key={q.label} label={q.label} query={q.query} />
+            <ExampleQuestion key={q.label} label={q.label} query={q.query} icon={q.icon} />
           ))}
+        </div>
+
+        {/* V3 badges */}
+        <div className="mt-12 flex items-center gap-3 text-[0.7rem] text-muted-foreground/40">
+          <span className="flex items-center gap-1">
+            <Zap className="w-3 h-3 text-amber-400/60" /> Semantic cache
+          </span>
+          <span className="w-1 h-1 rounded-full bg-muted-foreground/20" />
+          <span>Hybrid RAG v3</span>
+          <span className="w-1 h-1 rounded-full bg-muted-foreground/20" />
+          <span>Groq specdec · 1600 tok/s</span>
         </div>
       </div>
     );
@@ -36,15 +71,27 @@ export function MessageList({ messages, isThinking, thinkingMeta }) {
   return (
     <div className="flex-1 overflow-y-auto px-4 py-8 flex flex-col items-center scrollbar-none">
       <div className="w-full max-w-[46rem] space-y-10">
-        {messages.map((message) => (
-          <MessageBubble key={message.id} message={message} />
+        {messages.map((message, idx) => (
+          <MessageBubble
+            key={message.id}
+            message={message}
+            onFollowUp={onFollowUp}
+            isLastAssistant={
+              !message.isStreaming &&
+              message.role === "assistant" &&
+              idx === messages.length - 1
+            }
+          />
         ))}
 
+        {/* Thinking / pipeline visualization */}
         {isThinking && (
           <ThinkingIndicator
             okfSources={thinkingMeta?.okf_sources || 0}
             ragSources={thinkingMeta?.rag_sources || 0}
             total={thinkingMeta?.total || 0}
+            tier={thinkingMeta?.tier || "normal"}
+            isCacheHit={isCacheHit}
           />
         )}
 
@@ -54,11 +101,18 @@ export function MessageList({ messages, isThinking, thinkingMeta }) {
   );
 }
 
-/* ─── Example question buttons ────────────────────────────────── */
-function ExampleQuestion({ label, query }) {
+/* ─── Example question buttons ─────────────────────────────────────────────── */
+const EXAMPLE_QUESTIONS = [
+  { label: "Database", query: "How should I safely roll back a DB migration?", icon: "🗄️" },
+  { label: "Architecture", query: "Explain our API versioning standard.", icon: "🏗️" },
+  { label: "Incidents", query: "What caused the Q2 database outage?", icon: "🔥" },
+];
+
+function ExampleQuestion({ label, query, icon }) {
   return (
     <button
-      className="text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground underline decoration-transparent hover:decoration-muted-foreground/30 underline-offset-4"
+      className="group flex flex-col items-center gap-2 text-[0.8125rem] font-medium text-muted-foreground
+        transition-all hover:text-foreground"
       onClick={() => {
         const input = document.querySelector("#chat-input");
         if (input) {
@@ -68,18 +122,15 @@ function ExampleQuestion({ label, query }) {
         }
       }}
     >
-      {label}
+      <span className="text-xl">{icon}</span>
+      <span className="underline decoration-transparent group-hover:decoration-muted-foreground/30 underline-offset-4">
+        {label}
+      </span>
     </button>
   );
 }
 
-const EXAMPLE_QUESTIONS = [
-  { label: "Database", query: "How should I safely roll back a DB migration?" },
-  { label: "Architecture", query: "Explain our API versioning standard." },
-  { label: "Incidents", query: "What caused the Q2 database outage?" },
-];
-
-/* ─── Source strip — compact, expandable ──────────────────────── */
+/* ─── Source strip — compact, expandable ───────────────────────────────────── */
 const MAX_VISIBLE_SOURCES = 3;
 
 function SourceStrip({ sources }) {
@@ -87,7 +138,6 @@ function SourceStrip({ sources }) {
 
   if (!sources || sources.length === 0) return null;
 
-  // Sort by confidence desc, dedupe by filename
   const seen = new Set();
   const sorted = [...sources]
     .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
@@ -124,11 +174,11 @@ function SourceStrip({ sources }) {
   );
 }
 
-/* ─── Individual source pill ──────────────────────────────────── */
+/* ─── Individual source pill ───────────────────────────────────────────────── */
 function SourcePill({ source }) {
   const isOKF = source.is_okf === true;
   const shortName = (source.filename?.split("/").pop() || source.filename || "Source")
-    .replace(/\.[^.]+$/, ""); // strip extension for cleanliness
+    .replace(/\.[^.]+$/, "");
 
   return (
     <span
@@ -136,11 +186,12 @@ function SourcePill({ source }) {
         "inline-flex items-center gap-1 text-[0.7rem] font-medium px-2 py-0.5 rounded-full cursor-default transition-colors",
         "bg-[hsl(var(--secondary)/0.6)] text-muted-foreground border",
         isOKF
-          ? "border-[hsl(var(--border))] hover:bg-[hsl(var(--secondary))]"
+          ? "border-amber-500/30 hover:bg-amber-500/8"
           : "border-transparent hover:bg-[hsl(var(--secondary))]"
       )}
       title={source.content_preview || source.filename}
     >
+      {isOKF && <span className="text-amber-400">◆</span>}
       {shortName}
       {source.confidence ? (
         <span className="opacity-40 font-mono">{source.confidence}%</span>
@@ -149,8 +200,47 @@ function SourcePill({ source }) {
   );
 }
 
-/* ─── Message bubble ──────────────────────────────────────────── */
-function MessageBubble({ message }) {
+/* ─── Response metadata row ────────────────────────────────────────────────── */
+function ResponseMeta({ message }) {
+  if (!message.response_time_ms || message.isStreaming) return null;
+
+  const ms = Math.round(message.response_time_ms);
+  const isCacheHit = message.cache_hit;
+  const tier = message.tier;
+
+  return (
+    <div className="mt-3 flex items-center gap-2.5 flex-wrap">
+      {/* Time */}
+      <span className="flex items-center gap-1 text-[0.65rem] font-medium text-muted-foreground/40 tabular-nums">
+        <Timer className="w-3 h-3" />
+        {ms}ms
+      </span>
+
+      {/* Cache hit badge */}
+      {isCacheHit && (
+        <span className="flex items-center gap-1 text-[0.65rem] font-semibold px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400">
+          <Zap className="w-2.5 h-2.5 fill-amber-400" />
+          Cache hit
+        </span>
+      )}
+
+      {/* Routing tier badge */}
+      {tier === "fast" && !isCacheHit && (
+        <span className="text-[0.65rem] font-medium px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400">
+          Fast path
+        </span>
+      )}
+      {tier === "complex" && (
+        <span className="text-[0.65rem] font-medium px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-400">
+          Deep analysis
+        </span>
+      )}
+    </div>
+  );
+}
+
+/* ─── Message bubble ───────────────────────────────────────────────────────── */
+function MessageBubble({ message, onFollowUp, isLastAssistant = false }) {
   const isUser = message.role === "user";
   const sources = message.sources || [];
 
@@ -203,13 +293,17 @@ function MessageBubble({ message }) {
           )}
         </div>
 
-        {/* Response timing — quiet, at the bottom */}
-        {!isUser && message.response_time_ms && !message.isStreaming && (
-          <div className="mt-3">
-            <span className="text-[0.65rem] font-medium text-muted-foreground/40 tabular-nums">
-              {message.response_time_ms.toFixed(0)}ms
-            </span>
-          </div>
+        {/* Response metadata (time, cache badge, tier) */}
+        {!isUser && <ResponseMeta message={message} />}
+
+        {/* Follow-up suggestions — only on the last completed assistant message */}
+        {!isUser && isLastAssistant && message.content && !message.isStreaming && (
+          <FollowUpSuggestions
+            question={message.content}
+            answer={message.content}
+            sources={sources}
+            onSelect={onFollowUp}
+          />
         )}
       </div>
     </div>

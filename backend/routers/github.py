@@ -101,7 +101,7 @@ def _mask_token(text: str) -> str:
     return text
 
 
-from limiter import limiter
+from core.limiter import limiter
 from fastapi import Request
 
 @router.post("/github-index", response_model=GitHubIndexResponse)
