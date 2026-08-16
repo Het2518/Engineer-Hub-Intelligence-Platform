@@ -33,6 +33,18 @@ if (-not (Test-Path (Join-Path $FRONTEND "node_modules"))) {
     Pop-Location
 }
 
+# ── Kill any stale processes on ports 8000 / 3000 ────────────────────────────
+
+Write-Host "[0/2] Clearing stale processes on ports 8000 and 3000..." -ForegroundColor DarkGray
+foreach ($port in @(8000, 3000)) {
+    $portPid = (Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue).OwningProcess
+    if ($portPid) {
+        Stop-Process -Id $portPid -Force -ErrorAction SilentlyContinue
+        Write-Host "      Killed PID $portPid on port $port" -ForegroundColor DarkGray
+    }
+}
+Start-Sleep -Milliseconds 500
+
 # ── Start Backend ─────────────────────────────────────────────────────────────
 
 Write-Host "[1/2] Starting FastAPI backend on http://localhost:8000 ..." -ForegroundColor Green

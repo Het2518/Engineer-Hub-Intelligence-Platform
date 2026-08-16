@@ -1,0 +1,58 @@
+{
+  "directed": true,
+  "multigraph": false,
+  "graph": {},
+  "nodes": [
+    { "id": "api-gateway", "cost_per_hour": 5.0 },
+    { "id": "auth-service", "cost_per_hour": 1.2 },
+    { "id": "user-service", "cost_per_hour": 1.5 },
+    { "id": "payments-api", "cost_per_hour": 4.0 },
+    { "id": "notification-service", "cost_per_hour": 0.8 },
+    { "id": "inventory-service", "cost_per_hour": 2.5 },
+    { "id": "redis-cache", "cost_per_hour": 8.5 },
+    { "id": "postgres-db-primary", "cost_per_hour": 15.0 },
+    { "id": "postgres-db-replica", "cost_per_hour": 10.0 },
+    { "id": "kafka-event-bus", "cost_per_hour": 25.0 },
+    { "id": "stripe-webhook-handler", "cost_per_hour": 0.5 },
+    { "id": "runbook-payments-failure", "cost_per_hour": 0.0 },
+    { "id": "runbook-redis-eviction", "cost_per_hour": 0.0 },
+    { "id": "architecture-v2-spec", "cost_per_hour": 0.0 },
+    { "id": "incident-1943-redis-crash", "cost_per_hour": 0.0 },
+    { "id": "datadog-monitor-auth", "cost_per_hour": 3.0 },
+    { "id": "ci-cd-pipeline", "cost_per_hour": 1.0 },
+    { "id": "analytics-worker", "cost_per_hour": 6.0 }
+  ],
+  "edges": [
+    { "source": "api-gateway", "target": "auth-service", "relation": "routes authentication requests to" },
+    { "source": "api-gateway", "target": "user-service", "relation": "routes user queries to" },
+    { "source": "api-gateway", "target": "payments-api", "relation": "routes payment intents to" },
+    { "source": "api-gateway", "target": "inventory-service", "relation": "routes stock checks to" },
+    
+    { "source": "auth-service", "target": "postgres-db-primary", "relation": "reads/writes credentials to" },
+    { "source": "auth-service", "target": "redis-cache", "relation": "stores session tokens in" },
+    
+    { "source": "user-service", "target": "postgres-db-replica", "relation": "reads profiles from" },
+    
+    { "source": "payments-api", "target": "stripe-webhook-handler", "relation": "receives callbacks from" },
+    { "source": "payments-api", "target": "kafka-event-bus", "relation": "publishes payment events to" },
+    { "source": "payments-api", "target": "postgres-db-primary", "relation": "writes transaction records to" },
+    
+    { "source": "inventory-service", "target": "kafka-event-bus", "relation": "listens for checkout events from" },
+    { "source": "inventory-service", "target": "redis-cache", "relation": "caches stock counts in" },
+    
+    { "source": "kafka-event-bus", "target": "notification-service", "relation": "triggers email/sms via" },
+    { "source": "kafka-event-bus", "target": "analytics-worker", "relation": "streams telemetry to" },
+    
+    { "source": "postgres-db-primary", "target": "postgres-db-replica", "relation": "replicates data to" },
+    
+    { "source": "runbook-payments-failure", "target": "payments-api", "relation": "documents recovery steps for" },
+    { "source": "runbook-payments-failure", "target": "stripe-webhook-handler", "relation": "troubleshoots" },
+    
+    { "source": "runbook-redis-eviction", "target": "redis-cache", "relation": "manages memory policies for" },
+    { "source": "incident-1943-redis-crash", "target": "redis-cache", "relation": "post-mortem incident for" },
+    
+    { "source": "datadog-monitor-auth", "target": "auth-service", "relation": "monitors latency of" },
+    { "source": "architecture-v2-spec", "target": "api-gateway", "relation": "defines rate limiting for" },
+    { "source": "ci-cd-pipeline", "target": "api-gateway", "relation": "deploys updates to" }
+  ]
+}

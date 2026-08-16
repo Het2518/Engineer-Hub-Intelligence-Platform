@@ -33,36 +33,28 @@ export function MessageList({
 
   if (messages.length === 0) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center h-full animate-fade-in">
+      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center h-full">
         <div className="mb-6 relative">
-          <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center">
-            <BookOpen className="w-6 h-6 text-primary" />
-          </div>
-          <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center">
-            <Cpu className="w-3 h-3 text-emerald-400" />
+          <div className="w-12 h-12 rounded-xl bg-primary/5 flex items-center justify-center border border-border">
+            <BookOpen className="w-5 h-5 text-foreground/80" />
           </div>
         </div>
-        <h1 className="text-[1.35rem] font-semibold mb-1.5 tracking-tight text-foreground">
-          Engineer Hub
+        <h1 className="text-[1.125rem] font-semibold mb-2 text-foreground tracking-tight">
+          How can I help you understand<br/>your engineering systems?
         </h1>
         <p className="text-[0.875rem] text-muted-foreground mb-10 max-w-sm leading-relaxed">
-          Ask about your systems, code, incidents, architecture or knowledge base.
+          Search your runbooks, architecture,<br/>incidents, standards, and repositories.
         </p>
-        <div className="flex items-center justify-center gap-6">
-          {EXAMPLE_QUESTIONS.map((q) => (
-            <ExampleQuestion key={q.label} label={q.label} query={q.query} icon={q.icon} />
-          ))}
-        </div>
 
-        {/* V3 badges */}
-        <div className="mt-12 flex items-center gap-3 text-[0.7rem] text-muted-foreground/40">
-          <span className="flex items-center gap-1">
-            <Zap className="w-3 h-3 text-amber-400/60" /> Semantic cache
-          </span>
-          <span className="w-1 h-1 rounded-full bg-muted-foreground/20" />
-          <span>Hybrid RAG v3</span>
-          <span className="w-1 h-1 rounded-full bg-muted-foreground/20" />
-          <span>Groq specdec · 1600 tok/s</span>
+        <div className="w-full max-w-2xl mt-4">
+          <p className="text-[0.75rem] font-medium text-muted-foreground uppercase tracking-wider mb-4 text-left">
+            Suggested questions
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {EXAMPLE_QUESTIONS.map((q) => (
+              <ExampleQuestion key={q.query} query={q.query} />
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -92,6 +84,7 @@ export function MessageList({
             total={thinkingMeta?.total || 0}
             tier={thinkingMeta?.tier || "normal"}
             isCacheHit={isCacheHit}
+            agentState={thinkingMeta?.agentState}
           />
         )}
 
@@ -103,16 +96,16 @@ export function MessageList({
 
 /* ─── Example question buttons ─────────────────────────────────────────────── */
 const EXAMPLE_QUESTIONS = [
-  { label: "Database", query: "How should I safely roll back a DB migration?", icon: "🗄️" },
-  { label: "Architecture", query: "Explain our API versioning standard.", icon: "🏗️" },
-  { label: "Incidents", query: "What caused the Q2 database outage?", icon: "🔥" },
+  { query: "How does authentication work?" },
+  { query: "What caused the last payment incident?" },
+  { query: "Where is Redis configured?" },
+  { query: "Show me the API deployment process" },
 ];
 
-function ExampleQuestion({ label, query, icon }) {
+function ExampleQuestion({ query }) {
   return (
     <button
-      className="group flex flex-col items-center gap-2 text-[0.8125rem] font-medium text-muted-foreground
-        transition-all hover:text-foreground"
+      className="text-left px-4 py-3 rounded-lg border border-border bg-card text-[0.875rem] text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border/80 transition-all"
       onClick={() => {
         const input = document.querySelector("#chat-input");
         if (input) {
@@ -122,10 +115,7 @@ function ExampleQuestion({ label, query, icon }) {
         }
       }}
     >
-      <span className="text-xl">{icon}</span>
-      <span className="underline decoration-transparent group-hover:decoration-muted-foreground/30 underline-offset-4">
-        {label}
-      </span>
+      {query}
     </button>
   );
 }
@@ -286,10 +276,30 @@ function MessageBubble({ message, onFollowUp, isLastAssistant = false }) {
                 <p className="text-xs mt-0.5 opacity-80">{message.error}</p>
               </div>
             </div>
-          ) : message.isStreaming ? (
-            <StreamingMessage content={message.content} />
+          ) : message.isStreaming && !message.content && (!message.uiComponents || message.uiComponents.length === 0) ? (
+            <StreamingMessage content={""} />
           ) : (
-            <MarkdownRenderer content={message.content} />
+            <div className="flex flex-col gap-4">
+              {message.uiComponents && message.uiComponents.map((ui, idx) => (
+                <div key={idx} className="p-4 rounded-xl border border-primary/20 bg-background/50 backdrop-blur-sm shadow-sm">
+                  <div className="text-xs font-semibold text-primary/80 mb-2 uppercase tracking-wider flex items-center gap-2">
+                    <Cpu className="w-3.5 h-3.5" />
+                    Interactive: {ui.component}
+                  </div>
+                  <pre className="text-[0.8rem] text-muted-foreground overflow-auto p-2 bg-black/10 rounded">
+                    {JSON.stringify(ui.props, null, 2)}
+                  </pre>
+                  {/* Note: In a real implementation, we would dynamically map ui.component string to a real React component like <ComparisonTable {...ui.props} /> */}
+                </div>
+              ))}
+              {message.content && (
+                 message.isStreaming ? (
+                   <StreamingMessage content={message.content} />
+                 ) : (
+                   <MarkdownRenderer content={message.content} />
+                 )
+              )}
+            </div>
           )}
         </div>
 

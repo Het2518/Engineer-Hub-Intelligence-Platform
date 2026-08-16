@@ -143,6 +143,12 @@ async def _extract_image_vision(file_path: Path) -> str:
         base_url=settings.llm_base_url,
     )
 
+    # 5MB strict limit for Vision API to prevent OOM and API rejection
+    MAX_VISION_BYTES = 5 * 1024 * 1024
+    if file_path.stat().st_size > MAX_VISION_BYTES:
+        logger.warning("Image too large for Vision API", file=file_path.name, size=file_path.stat().st_size)
+        return f"[Image: {file_path.name}] — Image exceeds 5MB vision extraction limit."
+
     with open(file_path, "rb") as f:
         image_data = base64.b64encode(f.read()).decode("utf-8")
 

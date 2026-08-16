@@ -5,7 +5,7 @@
  * is never hard-coded in component or hook files.
  */
 
-import { API_BASE } from "./constants";
+import { API_BASE, getAuthHeaders } from "./constants";
 
 class ApiClient {
   constructor(base) {
@@ -19,6 +19,7 @@ class ApiClient {
 
     const res = await fetch(`${this.base}/upload`, {
       method: "POST",
+      headers: getAuthHeaders(),
       body: form,
     });
 
@@ -37,6 +38,7 @@ class ApiClient {
 
     const res = await fetch(`${this.base}/chat/parse-file`, {
       method: "POST",
+      headers: getAuthHeaders(),
       body: form,
     });
 
@@ -52,7 +54,7 @@ class ApiClient {
   async indexGitHub(repoUrl, branch) {
     const res = await fetch(`${this.base}/github-index`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ repo_url: repoUrl, branch }),
     });
 
@@ -68,7 +70,7 @@ class ApiClient {
   async chatNonStreaming(question, filterDocType) {
     const res = await fetch(`${this.base}/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ question, stream: false, filter_doc_type: filterDocType }),
     });
 
@@ -82,14 +84,14 @@ class ApiClient {
 
   /** Return the list of indexed document sources. */
   async getSources() {
-    const res = await fetch(`${this.base}/sources`);
+    const res = await fetch(`${this.base}/sources`, { headers: getAuthHeaders() });
     if (!res.ok) throw new Error("Failed to fetch sources");
     return res.json();
   }
 
   /** Return admin usage stats. */
   async getStats() {
-    const res = await fetch(`${this.base}/stats`);
+    const res = await fetch(`${this.base}/stats`, { headers: getAuthHeaders() });
     if (!res.ok) throw new Error("Failed to fetch stats");
     return res.json();
   }
@@ -98,6 +100,7 @@ class ApiClient {
   async healthCheck() {
     try {
       const res = await fetch(`${this.base}/health`, {
+        headers: getAuthHeaders(),
         signal: AbortSignal.timeout(3000),
       });
       return res.ok;

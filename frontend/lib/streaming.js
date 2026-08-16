@@ -1,6 +1,6 @@
 // SSE streaming utility for chat responses
 
-import { API_BASE } from "./constants";
+import { API_BASE, getAuthHeaders } from "./constants";
 
 export async function streamChat(
   question,
@@ -13,7 +13,7 @@ export async function streamChat(
   try {
     const response = await fetch(`${API_BASE}/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
         question,
         stream: true,
@@ -96,6 +96,12 @@ function handleEvent(event, callbacks) {
       break;
     case "error":
       callbacks.onError?.(event.message);
+      break;
+    case "agent_state":
+      callbacks.onAgentState?.(event.state);
+      break;
+    case "ui_component":
+      callbacks.onUIComponent?.(event.component, event.props);
       break;
   }
 }

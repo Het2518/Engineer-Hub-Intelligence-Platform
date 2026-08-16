@@ -122,10 +122,14 @@ async def chat(request: Request, payload: ChatRequest):
         search_query = await rewrite_query(payload.question, history)
 
     # ── 3. Hybrid RAG retrieval ───────────────────────────────────────────────
-    results = await hybrid_search(
-        question=search_query,
-        filter_doc_type=payload.filter_doc_type,
-    )
+    try:
+        results = await hybrid_search(
+            question=search_query,
+            filter_doc_type=payload.filter_doc_type,
+        )
+    except Exception as e:
+        logger.warning("Retrieval failed, continuing with empty context", error=str(e))
+        results = []
     sources = _format_sources(results)
     attached_dicts = [f.model_dump() for f in payload.attached_files] if payload.attached_files else None
 
@@ -143,8 +147,13 @@ async def chat(request: Request, payload: ChatRequest):
 
     # Non-streaming path
     full_answer = ""
-    async for chunk in stream_answer(payload.question, results, payload.session_id, attached_dicts):
-        full_answer += chunk
+    from services.llm import stream_answer
+    try:
+        async for token in stream_answer(payload.question, results, payload.session_id, attached_dicts):
+            full_answer += token
+    except Exception as e:
+        logger.error("Non-streaming error", error=str(e))
+        full_answer = "An error occurred while generating the answer."
 
     elapsed = (time.time() - start) * 1000
     record_query(elapsed)
@@ -174,19 +183,20 @@ async def _stream_cache_hit(cached_entry, start: float) -> AsyncIterator[str]:
     """SSE replay of a cached response — returns in ~50ms."""
     elapsed = (time.time() - start) * 1000
 
-    # Instant cache-hit badge for the frontend
-    yield f"data: {json.dumps({'type': 'cache_hit', 'similarity': 1.0})}\\n\\n"
+    # Instant cache-hit badge — use actual similarity if available
+    similarity = getattr(cached_entry, 'similarity', 1.0)
+    yield f"data: {json.dumps({'type': 'cache_hit', 'similarity': similarity})}\n\n"
 
     # Sources
-    yield f"data: {json.dumps({'type': 'sources', 'sources': cached_entry.sources})}\\n\\n"
+    yield f"data: {json.dumps({'type': 'sources', 'sources': cached_entry.sources})}\n\n"
 
-    # Replay the full answer as a single token chunk (no need to split)
-    yield f"data: {json.dumps({'type': 'token', 'content': cached_entry.answer})}\\n\\n"
+    # Replay the full answer as a single token chunk
+    yield f"data: {json.dumps({'type': 'token', 'content': cached_entry.answer})}\n\n"
 
     # Done
     record_query(elapsed)
-    yield f"data: {json.dumps({'type': 'done', 'response_time_ms': round(elapsed, 1), 'context_used': len(cached_entry.sources), 'okf_sources': 0, 'cache_hit': True})}\\n\\n"
-    yield "data: [DONE]\\n\\n"
+    yield f"data: {json.dumps({'type': 'done', 'response_time_ms': round(elapsed, 1), 'context_used': len(cached_entry.sources), 'okf_sources': 0, 'cache_hit': True})}\n\n"
+    yield "data: [DONE]\n\n"
 
 
 async def _stream_response(
@@ -200,24 +210,25 @@ async def _stream_response(
     tier: QueryTier = QueryTier.NORMAL,
 ) -> AsyncIterator[str]:
     """SSE event generator for streaming responses with pipeline stage events."""
+    from services.llm import stream_answer
 
     # 0. Pipeline stage — thinking/retrieval progress
     okf_count = sum(1 for r in results if r.metadata.get("is_okf"))
     rag_count  = len(results) - okf_count
-    yield f"data: {json.dumps({'type': 'thinking', 'okf_sources': okf_count, 'rag_sources': rag_count, 'total': len(results), 'tier': tier.value})}\\n\\n"
+    yield f"data: {json.dumps({'type': 'thinking', 'okf_sources': okf_count, 'rag_sources': rag_count, 'total': len(results), 'tier': tier.value})}\n\n"
 
-    # 1. Pipeline stage — sources ready
-    yield f"data: {json.dumps({'type': 'sources', 'sources': [s.model_dump() for s in sources]})}\\n\\n"
+    # 1. Sources ready
+    yield f"data: {json.dumps({'type': 'sources', 'sources': [s.model_dump() for s in sources]})}\n\n"
 
-    # 2. Stream answer tokens
+    # 2. Stream answer tokens directly from llm.stream_answer (reliable, non-blocking)
     full_answer = ""
     try:
         async for token in stream_answer(question, results, session_id, attached_files):
             full_answer += token
-            yield f"data: {json.dumps({'type': 'token', 'content': token})}\\n\\n"
+            yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
     except Exception as e:
         logger.error("Streaming error", error=str(e))
-        yield f"data: {json.dumps({'type': 'error', 'message': 'Stream interrupted. Please retry.'})}\\n\\n"
+        yield f"data: {json.dumps({'type': 'error', 'message': 'Stream interrupted. Please retry.'})}\n\n"
 
     # 3. Store in semantic cache (non-blocking)
     from config import get_settings
@@ -236,8 +247,8 @@ async def _stream_response(
     # 4. Done event
     elapsed = (time.time() - start) * 1000
     record_query(elapsed)
-    yield f"data: {json.dumps({'type': 'done', 'response_time_ms': round(elapsed, 1), 'context_used': len(results), 'okf_sources': okf_count, 'cache_hit': False, 'tier': tier.value})}\\n\\n"
-    yield "data: [DONE]\\n\\n"
+    yield f"data: {json.dumps({'type': 'done', 'response_time_ms': round(elapsed, 1), 'context_used': len(results), 'okf_sources': okf_count, 'cache_hit': False, 'tier': tier.value})}\n\n"
+    yield "data: [DONE]\n\n"
 
 
 # ── Session Management ────────────────────────────────────────────────────────

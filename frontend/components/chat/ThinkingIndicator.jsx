@@ -1,15 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Zap, Brain, Database, Cpu, CheckCircle } from "lucide-react";
-
-const STAGES = [
-  { id: "routing",   icon: Brain,    label: "Routing query",          duration: 300  },
-  { id: "cache",     icon: Zap,      label: "Checking cache",         duration: 200  },
-  { id: "retrieval", icon: Database, label: "Searching knowledge base", duration: 1200 },
-  { id: "ranking",   icon: Cpu,      label: "Ranking results",        duration: 400  },
-  { id: "generating",icon: Brain,    label: "Generating answer",      duration: null }, // lasts until done
-];
+import { Zap, Brain, Database, Cpu, CheckCircle, Component, Layers, Loader2 } from "lucide-react";
+import { cn } from "../../lib/utils";
 
 export function ThinkingIndicator({
   okfSources = 0,
@@ -17,38 +10,8 @@ export function ThinkingIndicator({
   total = 0,
   tier = "normal",
   isCacheHit = false,
+  agentState = null,
 }) {
-  const [currentStage, setCurrentStage] = useState(0);
-  const [completedStages, setCompletedStages] = useState([]);
-
-  useEffect(() => {
-    if (isCacheHit) {
-      // Skip directly to "done" for cache hits
-      setCompletedStages(STAGES.map((_, i) => i));
-      return;
-    }
-
-    let idx = 0;
-    const timers = [];
-
-    const advance = () => {
-      if (idx >= STAGES.length - 1) return;
-      const stage = STAGES[idx];
-      if (stage.duration) {
-        const t = setTimeout(() => {
-          setCompletedStages((prev) => [...prev, idx]);
-          idx += 1;
-          setCurrentStage(idx);
-          advance();
-        }, stage.duration);
-        timers.push(t);
-      }
-    };
-
-    advance();
-    return () => timers.forEach(clearTimeout);
-  }, [isCacheHit]);
-
   if (isCacheHit) {
     return (
       <div className="flex items-center gap-2 py-1 px-1 animate-fade-in">
@@ -60,68 +23,35 @@ export function ThinkingIndicator({
     );
   }
 
-  const active = STAGES[currentStage];
-  const Icon = active?.icon ?? Brain;
+  // Determine icon based on state
+  let Icon = Brain;
+  if (agentState) {
+    const s = agentState.toLowerCase();
+    if (s.includes("search")) Icon = Database;
+    else if (s.includes("render")) Icon = Component;
+    else if (s.includes("orchestrat")) Icon = Layers;
+    else if (s.includes("synthesiz")) Icon = Cpu;
+  }
 
   return (
-    <div className="flex flex-col gap-2 py-1 px-1 animate-fade-in">
-      {/* Pipeline stage track */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
-        {STAGES.map((stage, i) => {
-          const SIcon = stage.icon;
-          const done = completedStages.includes(i);
-          const active_ = currentStage === i && !done;
-          return (
-            <div
-              key={stage.id}
-              className="flex items-center gap-1"
-            >
-              <div
-                className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.7rem] font-medium transition-all duration-300
-                  ${done   ? "bg-green-500/15 text-green-400"
-                  : active_ ? "bg-primary/15 text-primary"
-                  :           "text-muted-foreground/30"}`}
-              >
-                {done
-                  ? <CheckCircle className="w-3 h-3" />
-                  : <SIcon className={`w-3 h-3 ${active_ ? "animate-pulse" : ""}`} />
-                }
-                <span className="whitespace-nowrap hidden sm:inline">{stage.label}</span>
-              </div>
-              {i < STAGES.length - 1 && (
-                <div className={`w-3 h-px ${done ? "bg-green-500/40" : "bg-border/30"}`} />
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Status text */}
-      <div className="flex items-center gap-2">
-        <div className="flex items-center gap-1">
-          {[0, 160, 320].map((delay) => (
-            <span
-              key={delay}
-              className="w-1.5 h-1.5 rounded-full bg-primary/40"
-              style={{ animation: `pulse 1.4s ease-in-out infinite`, animationDelay: `${delay}ms` }}
-            />
-          ))}
+    <div className="flex flex-col gap-3 py-2 px-1 animate-fade-in">
+      <div className="flex items-center gap-3">
+        <div className="relative">
+          <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping opacity-75"></div>
+          <div className="relative bg-[hsl(var(--secondary))] border border-primary/30 p-1.5 rounded-full">
+            <Icon className="w-4 h-4 text-primary animate-pulse" />
+          </div>
         </div>
-        <span className="text-[0.8125rem] text-muted-foreground/60 font-medium">
-          {total > 0
-            ? `Searching ${total} source${total !== 1 ? "s" : ""}${tier === "fast" ? " (fast path)" : tier === "complex" ? " (deep analysis)" : ""}…`
-            : "Thinking…"}
-        </span>
-        {tier === "fast" && (
-          <span className="text-[0.65rem] px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-medium">
-            Fast
+        
+        <div className="flex flex-col">
+          <span className="text-[0.875rem] font-semibold text-foreground/90 flex items-center gap-2">
+            {agentState || "Initializing Agent Swarm..."}
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground/50" />
           </span>
-        )}
-        {tier === "complex" && (
-          <span className="text-[0.65rem] px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-400 font-medium">
-            Deep
+          <span className="text-[0.7rem] text-muted-foreground/70">
+            {total > 0 ? `Active context: ${total} sources` : "Analyzing intent and selecting tools"}
           </span>
-        )}
+        </div>
       </div>
     </div>
   );

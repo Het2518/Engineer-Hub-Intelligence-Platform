@@ -24,6 +24,7 @@ from schemas.upload import UploadResponse, ParseResponse
 from services.ingestion import extract_text
 from services.chunking import chunk_text
 from services.embedding import embed_texts
+from services.graph_builder import get_graph_builder
 import structlog
 
 logger = structlog.get_logger()
@@ -180,6 +181,13 @@ async def upload_document(request: Request, file: UploadFile = File(...)) -> Upl
 
         logger.info("Document indexed", filename=safe_name, chunks=len(chunks), doc_type=doc_type)
 
+        # ── V4: Neuro-Graph Extraction ──────────────────────────────────────
+        try:
+            builder = get_graph_builder()
+            asyncio.create_task(builder.extract_and_add_to_graph(text, safe_name))
+        except Exception as e:
+            logger.warning("Neuro-Graph extraction failed to start", error=str(e))
+
         # ── V3: Invalidate caches (new doc may change answers) ──────────────
         try:
             from services.bm25_cache import get_bm25_cache
@@ -227,7 +235,12 @@ async def upload_document(request: Request, file: UploadFile = File(...)) -> Upl
         logger.error("Upload failed", error=str(e), filename=safe_name)
         raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
     finally:
-        pass
+        # Clean up the file to prevent disk leaks
+        if file_path.exists():
+            try:
+                file_path.unlink()
+            except Exception as e:
+                logger.warning("Failed to delete temp file", path=str(file_path), error=str(e))
 
 
 @router.post("/chat/parse-file", response_model=ParseResponse)

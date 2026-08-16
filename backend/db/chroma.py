@@ -15,7 +15,11 @@ _DEFAULT_PERSIST_DIR = os.path.abspath(
 
 @lru_cache()
 def get_chroma_client() -> chromadb.PersistentClient:
-    persist_dir = os.environ.get("CHROMA_PERSIST_DIR", _DEFAULT_PERSIST_DIR)
+    app_settings = get_settings()
+    persist_dir = app_settings.chroma_persist_dir
+    # Resolve relative paths to absolute so ChromaDB always persists in the right place
+    if not os.path.isabs(persist_dir):
+        persist_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", persist_dir))
     os.makedirs(persist_dir, exist_ok=True)
     logger.info("Using local ChromaDB (PersistentClient)", path=persist_dir)
     client = chromadb.PersistentClient(
@@ -26,25 +30,25 @@ def get_chroma_client() -> chromadb.PersistentClient:
 
 
 def get_collection():
-    settings = get_settings()
+    app_settings = get_settings()
     client = get_chroma_client()
-    
-    embedding_function = None
-    if settings.hf_token:
-        from chromadb.utils import embedding_functions
-        logger.info("Using HuggingFace Inference API for embeddings")
-        embedding_function = embedding_functions.HuggingFaceEmbeddingFunction(
-            api_key=settings.hf_token,
-            model_name="sentence-transformers/all-MiniLM-L6-v2"
+    # We always supply pre-computed embeddings to .add() and .query(),
+    # so no ChromaDB-side embedding function is needed.
+    # Passing embedding_function=None silences the "already exists" conflict
+    # when the collection was previously created with a different function.
+    try:
+        collection = client.get_or_create_collection(
+            name=app_settings.chroma_collection,
+            metadata={"hnsw:space": "cosine"},
+            embedding_function=None,
         )
-    else:
-        logger.warning("HF_TOKEN not set! Embeddings will run locally and may crash free tiers.")
-
-    collection = client.get_or_create_collection(
-        name=settings.chroma_collection,
-        metadata={"hnsw:space": "cosine"},
-        embedding_function=embedding_function
-    )
+    except Exception:
+        # Older ChromaDB versions don't accept embedding_function=None in
+        # get_or_create_collection; fall back to get_collection() only.
+        collection = client.get_collection(
+            name=app_settings.chroma_collection,
+            embedding_function=None,
+        )
     return collection
 
 

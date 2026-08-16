@@ -423,7 +423,6 @@ export function OKFCreateForm({ onSuccess, onCancel, initialDoc = null }) {
         </button>
         <button
           type="submit"
-          onClick={handleSubmit}
           disabled={saving || success}
           className="btn-primary flex-1 justify-center"
         >

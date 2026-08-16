@@ -61,7 +61,8 @@ class BM25Cache:
             self._building = True
 
         try:
-            await asyncio.get_event_loop().run_in_executor(None, self._rebuild_sync, limit)
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, self._rebuild_sync, limit)
         finally:
             self._building = False
 

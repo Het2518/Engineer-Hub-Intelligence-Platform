@@ -104,6 +104,15 @@ async def hybrid_search(
         reader = get_okf_reader()
         okf_task = asyncio.create_task(reader.search(question, top_k=3))
 
+    # ── V4: Neuro-Graph Query ───────────────────────────────────────────────
+    graph_context = ""
+    try:
+        from services.graph_builder import get_graph_builder
+        graph_builder = get_graph_builder()
+        graph_context = graph_builder.query_graph(question)
+    except Exception as e:
+        logger.warning("Neuro-Graph query failed", error=str(e))
+
     if total_chunks == 0 and not okf_task:
         logger.warning("No documents in collection and OKF disabled")
         return []
@@ -174,16 +183,16 @@ async def hybrid_search(
             }
         candidate_map[key]["rrf_score"] += 1.0 / (60 + rank + 1)
 
-    # Sort candidates by fused RRF score to select a subset for expensive Cross-Encoder
+    # Sort candidates by fused RRF score to select a subset for MMR reranking
     candidates = sorted(candidate_map.values(), key=lambda x: x["rrf_score"], reverse=True)
     subset = candidates[: min(len(candidates), top_k * 3)]
 
-    # ── 4. Cross-Encoder Re-ranking (DISABLED FOR ROBUSTNESS) ───────────────
-    # We disable the MS-MARCO cross-encoder because it is too strict for 
-    # casually phrased queries and often penalizes personal documents like resumes.
-    # We now rely entirely on the much more robust RRF (Reciprocal Rank Fusion).
-    
-    selected = subset[:top_k]
+    # ── 4. MMR Diversity Re-ranking ──────────────────────────────────────────
+    # Maximal Marginal Relevance balances relevance vs. diversity.
+    # Previously this was dead code — now wired in.
+    selected = _mmr_rerank(subset, top_k)
+    if not selected:  # fallback if MMR returns nothing (empty input edge case)
+        selected = subset[:top_k]
 
     # Normalize RRF scores so they look like realistic confidence percentages (e.g. 95%, 85%)
     max_rrf = max((item["rrf_score"] for item in selected), default=1.0)
@@ -212,8 +221,26 @@ async def hybrid_search(
         okf_keys = {_content_key(r.content) for r in okf_results}
         deduped_rag = [r for r in rag_results if _content_key(r.content) not in okf_keys]
         final = (okf_results + deduped_rag)[:top_k]
-        logger.info("Hybrid search complete", okf=len(okf_results), rag=len(deduped_rag), total=len(final))
-        return final
+    else:
+        final = rag_results[:top_k]
+
+    if graph_context:
+        graph_result = RetrievalResult(
+            content=graph_context,
+            metadata={
+                "source": "Neuro-Graph Synthesizer",
+                "filename": "Dynamic Knowledge Graph",
+                "doc_type": "neuro_graph",
+                "trust_level": "high",
+                "is_okf": True,
+            },
+            score=1.0,
+        )
+        final.insert(0, graph_result)
+
+    if final:
+        logger.info("Hybrid search complete", okf=len(okf_results), rag=len(rag_results), graph=bool(graph_context), total=len(final))
+        return final[:top_k]
 
     logger.info("Hybrid search complete (RAG only)", rag=len(rag_results))
     return rag_results

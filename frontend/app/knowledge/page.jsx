@@ -5,6 +5,7 @@ import { Search, Plus, RefreshCw, AlertTriangle, Loader2 } from "lucide-react";
 import { OKFDocumentCard, OKF_TYPE_CONFIG } from "../../components/knowledge/OKFDocumentCard";
 import { OKFDocumentViewer } from "../../components/knowledge/OKFDocumentViewer";
 import { OKFCreateForm } from "../../components/knowledge/OKFCreateForm";
+import { cn } from "../../lib/utils";
 
 const ALL_FILTER = "All";
 
@@ -201,19 +202,89 @@ export default function KnowledgePage() {
               )}
             </div>
           ) : (
-            <div className={`grid gap-4 ${showPanel ? "grid-cols-1 xl:grid-cols-2" : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3 lg:gap-6"}`}>
-              {filteredDocs.map((doc) => (
-                <OKFDocumentCard
-                  key={doc.source_id}
-                  doc={doc}
-                  isActive={selectedDoc?.source_id === doc.source_id}
-                  onClick={(d) => {
-                    setSelectedDoc(d);
-                    setShowCreate(false);
-                    setEditDoc(null);
-                  }}
-                />
-              ))}
+            <div className="w-full bg-card border border-border rounded-lg overflow-hidden shadow-sm">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-border bg-muted/30">
+                    <th className="px-4 py-3 text-[0.75rem] font-semibold text-muted-foreground uppercase tracking-wider w-8"></th>
+                    <th className="px-4 py-3 text-[0.75rem] font-semibold text-muted-foreground uppercase tracking-wider">Name</th>
+                    <th className="px-4 py-3 text-[0.75rem] font-semibold text-muted-foreground uppercase tracking-wider">Type</th>
+                    <th className="px-4 py-3 text-[0.75rem] font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
+                    <th className="px-4 py-3 text-[0.75rem] font-semibold text-muted-foreground uppercase tracking-wider hidden sm:table-cell">Tags</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {filteredDocs.map((doc) => {
+                    const typeConf = OKF_TYPE_CONFIG[doc.okf_type] || OKF_TYPE_CONFIG.Standard;
+                    const TypeIcon = typeConf.icon;
+                    const isActive = selectedDoc?.source_id === doc.source_id;
+                    
+                    return (
+                      <tr
+                        key={doc.source_id}
+                        onClick={() => {
+                          setSelectedDoc(doc);
+                          setShowCreate(false);
+                          setEditDoc(null);
+                        }}
+                        className={cn(
+                          "group cursor-pointer transition-colors",
+                          isActive ? "bg-secondary" : "hover:bg-secondary/50 bg-card"
+                        )}
+                      >
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <TypeIcon className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <p className="text-[0.875rem] font-medium text-foreground truncate max-w-[200px] md:max-w-xs">{doc.title}</p>
+                          {doc.description && <p className="text-[0.75rem] text-muted-foreground truncate max-w-[200px] md:max-w-xs mt-0.5">{doc.description}</p>}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <span className="inline-flex items-center text-[0.75rem] font-medium text-foreground px-2 py-0.5 rounded-md bg-secondary border border-border">
+                            {typeConf.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="flex items-center gap-1.5">
+                            {doc.trust_level === "HIGH" ? (
+                              <span className="flex items-center gap-1 text-[0.75rem] font-medium text-green-600 dark:text-green-500">
+                                <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                                Verified
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1 text-[0.75rem] font-medium text-muted-foreground">
+                                <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50"></span>
+                                Draft
+                              </span>
+                            )}
+                            {doc.is_stale && (
+                              <span className="text-[0.65rem] font-bold px-1.5 py-0.5 rounded border border-orange-500/50 text-orange-600 dark:text-orange-400 ml-1">
+                                STALE
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap hidden sm:table-cell">
+                          {doc.tags?.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {doc.tags.slice(0, 2).map((tag) => (
+                                <span key={tag} className="text-[0.7rem] px-1.5 py-0.5 rounded font-medium bg-muted text-muted-foreground">
+                                  #{tag}
+                                </span>
+                              ))}
+                              {doc.tags.length > 2 && (
+                                <span className="text-[0.7rem] text-muted-foreground">+{doc.tags.length - 2}</span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-[0.75rem] text-muted-foreground/50">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>

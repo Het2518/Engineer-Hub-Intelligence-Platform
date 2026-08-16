@@ -191,7 +191,7 @@ def _build_context(results: List[RetrievalResult]) -> str:
     return "\n\n".join(context_parts)
 
 
-def _build_fallback_answer(question: str, results: List[RetrievalResult]) -> str:
+def _build_fallback_answer(question: str, results: List[RetrievalResult], error: Exception = None) -> str:
     """Return a clean, single-source fallback when the model provider is unavailable."""
     ranked = _select_and_rank_results(results)
 
@@ -199,6 +199,7 @@ def _build_fallback_answer(question: str, results: List[RetrievalResult]) -> str
         return (
             "The AI model is temporarily unavailable, and no relevant content was found "
             "in the knowledge base for this query.\n\n"
+            f"**Error Details:** {str(error)}\n\n"
             "Please check your model provider configuration and try again."
         )
 
@@ -240,6 +241,9 @@ async def stream_answer(
     file_injection = ""
     if attached_files:
         files_text = "\n\n".join([f"=== File: {f.get('filename')} ===\n{f.get('content')}" for f in attached_files])
+        # Defensive truncation: Groq's free tier has a strict 6,000 TPM limit.
+        if len(files_text) > 10000:
+            files_text = files_text[:10000] + "\n\n...[TRUNCATED TO PREVENT RATE LIMIT (413) ERROR]..."
         file_injection = f"**User Attached Documents (Highest Priority Context):**\n{files_text}\n\n=========================\n\n"
 
     user_message = (
@@ -304,7 +308,7 @@ async def stream_answer(
         question=question,
         session_id=session_id,
     )
-    yield _build_fallback_answer(question, results)
+    yield _build_fallback_answer(question, results, last_error)
 
 
 async def get_answer(

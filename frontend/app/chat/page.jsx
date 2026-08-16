@@ -23,6 +23,7 @@ function ChatPageContent() {
     stopStreaming,
     clearMessages,
     loadSession,
+    hydrated,
   } = useChat();
 
   // Export hook — derives session title from first user message
@@ -31,6 +32,7 @@ function ChatPageContent() {
   const { exportMarkdown, exportJSON } = useChatExport(messages, sessionTitle);
 
   useEffect(() => {
+    if (!hydrated) return;
     if (urlSessionId) {
       if (sessionId !== urlSessionId) loadSession(urlSessionId);
     } else {
@@ -39,7 +41,7 @@ function ChatPageContent() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlSessionId]);
+  }, [urlSessionId, hydrated]);
 
   // Fill the chat input with a follow-up suggestion
   const handleFollowUp = useCallback((suggestion) => {

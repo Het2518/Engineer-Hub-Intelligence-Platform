@@ -129,7 +129,7 @@ export default function AdminPage() {
                 />
                 <StatusRow
                   label="OKF Bundle"
-                  status={okfStats?.total_documents > 0 ? "up" : "down"}
+                  status={health?.okf?.status === "ok" ? "up" : "down"}
                   detail={okfStats ? `${okfStats.total_documents} docs` : "No docs"}
                 />
                 <StatusRow

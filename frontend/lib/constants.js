@@ -7,7 +7,7 @@
 
 /** Backend API base URL — set NEXT_PUBLIC_API_URL in .env.local to override. */
 export const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 /** Supported file extensions for the upload dropzone. */
 export const ALLOWED_UPLOAD_EXTENSIONS = [
@@ -36,3 +36,12 @@ export const ROUTES = {
   knowledge: "/knowledge",
   admin: "/admin",
 };
+
+/** Return auth headers if NEXT_PUBLIC_API_KEY is configured. */
+export function getAuthHeaders(extraHeaders = {}) {
+  const headers = { ...extraHeaders };
+  if (process.env.NEXT_PUBLIC_API_KEY) {
+    headers["Authorization"] = `Bearer ${process.env.NEXT_PUBLIC_API_KEY}`;
+  }
+  return headers;
+}

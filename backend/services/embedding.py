@@ -17,19 +17,35 @@ logger = structlog.get_logger()
 settings = get_settings()
 
 _ef = None
-
+_default_ef = None
 
 def _get_embedding_function():
-    global _ef
+    global _ef, _default_ef
     if _ef is None:
-        _ef = embedding_functions.DefaultEmbeddingFunction()
+        if settings.hf_token:
+            _ef = embedding_functions.HuggingFaceEmbeddingFunction(
+                api_key=settings.hf_token,
+                model_name="sentence-transformers/all-MiniLM-L6-v2"
+            )
+        else:
+            if _default_ef is None:
+                _default_ef = embedding_functions.DefaultEmbeddingFunction()
+            _ef = _default_ef
     return _ef
 
 
 def _embed_batch_sync(texts: List[str]) -> List[List[float]]:
     """Synchronous embedding call — intended to run inside a thread pool."""
+    global _ef, _default_ef
     ef = _get_embedding_function()
-    return ef(texts)
+    try:
+        return ef(texts)
+    except Exception as e:
+        logger.warning("Primary embedding function failed, falling back to local DefaultEmbeddingFunction", error=str(e))
+        if _default_ef is None:
+            _default_ef = embedding_functions.DefaultEmbeddingFunction()
+        _ef = _default_ef
+        return _ef(texts)
 
 
 from langsmith import traceable
@@ -53,7 +69,10 @@ async def embed_texts(texts: List[str], batch_size: int = 64) -> List[List[float
         try:
             # asyncio.to_thread is the idiomatic Python 3.9+ way to avoid
             # blocking the event loop with synchronous CPU/IO work.
-            batch_embeddings = await asyncio.to_thread(_embed_batch_sync, batch)
+            batch_embeddings = await asyncio.wait_for(
+                asyncio.to_thread(_embed_batch_sync, batch),
+                timeout=10.0
+            )
             all_embeddings.extend(batch_embeddings)
             logger.debug("Embedded batch", batch_num=i // batch_size + 1, count=len(batch))
         except Exception as e:

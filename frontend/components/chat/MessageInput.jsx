@@ -169,7 +169,7 @@ export function MessageInput({ onSend, isLoading, onStop }) {
         </div>
 
         <p className="text-center text-[0.6875rem] text-muted-foreground/60 mt-3 font-medium">
-          Axiom can make mistakes. Verify critical engineering decisions.
+          Axioms can make mistakes. Verify critical engineering decisions.
         </p>
       </div>
     </div>

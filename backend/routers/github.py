@@ -126,7 +126,7 @@ async def index_github_repo(request: Request, payload: GitHubIndexRequest) -> Gi
 
         # ── Async clone — does not block the event loop ───────────────────────
         try:
-            await asyncio.to_thread(_clone_repo, clone_url, str(tmp_dir), request.branch)
+            await asyncio.to_thread(_clone_repo, clone_url, str(tmp_dir), payload.branch)
         except git.GitCommandError as e:
             safe_msg = _mask_token(str(e))[:300]
             logger.error("Git clone failed", repo_url=repo_url, error=safe_msg)

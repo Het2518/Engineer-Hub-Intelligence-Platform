@@ -60,7 +60,7 @@ export function MarkdownRenderer({ content, streaming = false }) {
   const clean = formatSourceBadges(content || "");
 
   return (
-    <div className={`prose-premium${streaming ? " streaming-cursor" : ""}`}>
+    <div className={`prose dark:prose-invert max-w-none${streaming ? " streaming-cursor" : ""}`}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeRaw]}

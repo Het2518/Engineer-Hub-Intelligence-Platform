@@ -16,7 +16,9 @@ from config import get_settings
 
 settings = get_settings()
 
-DB_PATH = os.path.join(settings.upload_dir, "chat_history.db")
+# Resolve DB path relative to this file's location (never depends on CWD)
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "uploads", "chat_history.db")
+DB_PATH = os.path.normpath(DB_PATH)
 MAX_MESSAGES_PER_SESSION = 40  # hard cap; get_history returns latest 20
 
 

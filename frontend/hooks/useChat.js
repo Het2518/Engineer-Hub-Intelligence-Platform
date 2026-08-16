@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { streamChat } from "../lib/streaming";
-import { API_BASE } from "../lib/constants";
+import { API_BASE, getAuthHeaders } from "../lib/constants";
 
 export function useChat() {
   // Always start with empty/default state to match SSR — hydrate from
@@ -56,12 +56,19 @@ export function useChat() {
       role: "assistant",
       content: "",
       isStreaming: true,
+      uiComponents: [],
+      agentState: "Initializing...",
     };
 
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
     setIsLoading(true);
 
     abortRef.current = new AbortController();
+
+    // Prevent infinite shimmer: Abort if no response after 15 seconds
+    const timeoutId = setTimeout(() => {
+      abortRef.current?.abort(new Error("Request timed out. The backend took too long to respond."));
+    }, 15000);
 
     // ── Stream batching to prevent MarkdownRenderer freeze ──
     let tokenBuffer = "";
@@ -85,10 +92,12 @@ export function useChat() {
         question,
         {
           onCacheHit: () => {
+            clearTimeout(timeoutId);
             setIsCacheHit(true);
             setIsThinking(false);
           },
           onThinking: (meta) => {
+            clearTimeout(timeoutId);
             setIsCacheHit(false);
             setIsThinking(true);
             setThinkingMeta(meta);
@@ -99,6 +108,26 @@ export function useChat() {
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantMsgId ? { ...m, sources } : m
+              )
+            );
+          },
+          onAgentState: (state) => {
+            clearTimeout(timeoutId);
+            setIsThinking(true);
+            setThinkingMeta((prev) => ({ ...prev, agentState: state }));
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMsgId ? { ...m, agentState: state } : m
+              )
+            );
+          },
+          onUIComponent: (component, props) => {
+            clearTimeout(timeoutId);
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMsgId
+                  ? { ...m, uiComponents: [...(m.uiComponents || []), { component, props }] }
+                  : m
               )
             );
           },
@@ -132,6 +161,7 @@ export function useChat() {
             setIsLoading(false);
           },
           onError: (error) => {
+            clearTimeout(timeoutId);
             if (flushTimer) clearTimeout(flushTimer);
             flushTokens();
             setIsThinking(false);
@@ -194,7 +224,7 @@ export function useChat() {
     stopStreaming();
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/chat/sessions/${id}`);
+      const res = await fetch(`${API_BASE}/chat/sessions/${id}`, { headers: getAuthHeaders() });
       if (res.ok) {
         const data = await res.json();
         const formatted = (data.messages || []).map((m, i) => ({
@@ -227,5 +257,6 @@ export function useChat() {
     stopStreaming,
     clearMessages,
     loadSession,
+    hydrated,
   };
 }

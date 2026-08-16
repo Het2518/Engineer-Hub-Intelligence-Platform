@@ -21,8 +21,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from config import get_settings
 from core.limiter import limiter
 from core.security import verify_api_key
-from routers import upload, github, chat, sources, stats
-from routers import knowledge as knowledge_router
+from routers import upload, github, chat, sources, stats, knowledge, graph
 
 # Configure structured logging
 structlog.configure(
@@ -113,7 +112,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # CORS — allow Next.js frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins.split(","),
+    allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "Accept"],
@@ -130,7 +129,8 @@ app.include_router(github.router,             tags=["Ingestion"])
 app.include_router(chat.router,               tags=["Chat"])
 app.include_router(sources.router,            tags=["Knowledge Base"])
 app.include_router(stats.router,              tags=["Admin"])
-app.include_router(knowledge_router.router,   tags=["Knowledge"])   # ← V2: OKF
+app.include_router(knowledge.router,          tags=["Knowledge"])   # ← V2: OKF
+app.include_router(graph.router,              tags=["Graph"])
 
 
 # ── Cache & Analytics Endpoints ─────────────────────────────────────────────
